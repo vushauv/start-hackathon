@@ -1,5 +1,17 @@
-# Large dataset files - obtained separately
+# Large dataset files - obtained separately. Fixture JSONL under tests/ is checked in.
 *.jsonl
+!tests/**/*.jsonl
+
+# Local data and eval runs
+data/
+runs/
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.py[cod]
+*.egg-info/
 
 # Node / build
 node_modules/
