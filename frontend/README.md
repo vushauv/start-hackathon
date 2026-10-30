@@ -12,8 +12,8 @@ docker compose down
 ```
 
 Source is bind-mounted into the container, so edits hot-reload (file watching uses
-polling because bind mounts don't reliably emit fs events). The repo root is mounted
-read-only at `/data`. After changing `package.json`, rebuild with `--build`.
+polling because bind mounts don't reliably emit fs events). The three `.jsonl` files are mounted
+read-only at `/data`, and the port is published on `127.0.0.1` only (it's a dev server). After changing `package.json`, rebuild with `--build`.
 
 ## Local
 

@@ -2,7 +2,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173" # dev server: local machine only
     environment:
       DATA_DIR: /data
       # bind mounts don't reliably emit fs events (Docker Desktop / VMs)
@@ -10,4 +10,19 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules # keep the image's installed deps
-      - ./:/data:ro # .jsonl files live in the repo root
+      # only the dataset files, read-only; fail fast if one is missing
+      - type: bind
+        source: ./histories.jsonl
+        target: /data/histories.jsonl
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ./questions.jsonl
+        target: /data/questions.jsonl
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ./gold.jsonl
+        target: /data/gold.jsonl
+        read_only: true
+        bind: { create_host_path: false }
