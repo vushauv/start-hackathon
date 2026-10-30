@@ -1,0 +1,7 @@
+# Large dataset files - obtained separately
+*.jsonl
+
+# Node / build
+node_modules/
+dist/
+*.local
