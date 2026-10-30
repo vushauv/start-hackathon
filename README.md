@@ -22,3 +22,9 @@ knowledge-update, single-session-user. 30 questions are abstention cases.
 - `main` - stable
 - `dev` - integration
 - `feature/frontend` - React dataset explorer (see `frontend/`)
+
+## Quick start
+
+```
+docker compose up --build   # frontend at http://localhost:5173, hot reload
+```
