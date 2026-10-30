@@ -1,0 +1,7 @@
+{"question_id": "q_degree", "question_type": "single-session-user", "abstain": false, "answer": "marine biology", "aliases": [], "evidence": ["s_degree"]}
+{"question_id": "q_oil", "question_type": "single-session-assistant", "abstain": false, "answer": "1:10", "aliases": ["1 to 10"], "evidence": ["s_degree"]}
+{"question_id": "q_5k", "question_type": "knowledge-update", "abstain": false, "answer": "25:50", "aliases": [], "evidence": ["s_old", "s_new"]}
+{"question_id": "q_when", "question_type": "temporal-reasoning", "abstain": false, "answer": "2023/05/20", "aliases": [], "evidence": ["s_new"]}
+{"question_id": "q_both", "question_type": "multi-session", "abstain": false, "answer": "marine biology and 25:50", "aliases": [], "evidence": ["s_degree", "s_new"]}
+{"question_id": "q_hamster", "question_type": "single-session-user", "abstain": true, "answer": "not in the history", "aliases": [], "evidence": []}
+{"question_id": "q_plugh", "question_type": "single-session-user", "abstain": true, "answer": "not in the history", "aliases": [], "evidence": []}
