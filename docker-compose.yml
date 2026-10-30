@@ -1,0 +1,13 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      DATA_DIR: /data
+      # bind mounts don't reliably emit fs events (Docker Desktop / VMs)
+      USE_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # keep the image's installed deps
+      - ./:/data:ro # .jsonl files live in the repo root

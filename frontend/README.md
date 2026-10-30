@@ -2,6 +2,21 @@
 
 React + Vite explorer for the JSON-L dataset.
 
+## Docker (hot reload)
+
+From the repo root, with the `.jsonl` files in place:
+
+```
+docker compose up --build    # http://localhost:5173
+docker compose down
+```
+
+Source is bind-mounted into the container, so edits hot-reload (file watching uses
+polling because bind mounts don't reliably emit fs events). The repo root is mounted
+read-only at `/data`. After changing `package.json`, rebuild with `--build`.
+
+## Local
+
 ```
 npm install
 npm run dev          # http://localhost:5173

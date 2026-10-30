@@ -106,4 +106,7 @@ const dataPlugin = {
 
 export default defineConfig({
   plugins: [react(), dataPlugin],
+  server: {
+    watch: process.env.USE_POLLING ? { usePolling: true, interval: 300 } : undefined,
+  },
 })
