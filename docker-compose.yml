@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432" # local machine only
+    volumes:
+      - postgres_data:/var/lib/postgresql # PG 18+ expects the parent of the versioned data dir
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   frontend:
     build: ./frontend
     ports:
@@ -26,3 +43,6 @@ services:
         target: /data/gold.jsonl
         read_only: true
         bind: { create_host_path: false }
+
+volumes:
+  postgres_data:

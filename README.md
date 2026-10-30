@@ -1,7 +1,8 @@
 # Long-term Memory Benchmark Explorer
 
 Tooling around a LongMemEval-style conversational-memory dataset: given a user's
-long chat history (~48 sessions), answer questions about them.
+long chat history (~48 sessions), answer questions about them. Services run via
+Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18.
 
 ## Dataset
 
@@ -40,14 +41,32 @@ cd ..
 The release assets are gzip-compressed (`.tar.gz`). If an archive is ever
 published as `.tar.xz`, extract it with `tar -xJf` instead.
 
-## Branches
+## Configuration
 
-- `main` - stable
-- `dev` - integration
-- `feature/frontend` - React dataset explorer (see `frontend/`)
+Compose reads settings from `.env`. Create it from the template and set values:
+
+```
+cp .env.example .env
+```
+
+| Variable | Description | Default |
+|---|---|---|
+| `POSTGRES_USER` | Database superuser name | `postgres` |
+| `POSTGRES_PASSWORD` | Database superuser password | `change-me` |
+| `POSTGRES_DB` | Database created on first start | `memory` |
+| `POSTGRES_PORT` | Host port (bound to `127.0.0.1`) | `5432` |
+
+Credentials are applied only when the data volume is first initialised. After
+changing them, reset the volume with `docker compose down -v`.
 
 ## Quick start
 
 ```
 docker compose up --build   # frontend at http://localhost:5173, hot reload
+```
+
+Postgres data persists in the `postgres_data` volume. Connect with:
+
+```
+psql "postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:$POSTGRES_PORT/$POSTGRES_DB"
 ```
