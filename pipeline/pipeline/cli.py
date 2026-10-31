@@ -6,6 +6,7 @@
     pipeline score    --split dev                  # dev only: the organizers' metrics
     pipeline run      --split dev --limit 20       # all of the above that apply
     pipeline run      --split dev --provider groq  # same, answered by a Groq LLM -> runs/dev/groq/<model>/
+    pipeline serve    --split dev                  # HTTP API for the web chat (web/)
 
 Files live in ``pipeline/runs/<split>/`` unless overridden with --evidence/--results/--predictions.
 """
@@ -253,6 +254,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dry-run", action="store_true", help="show everything but do not call Reactor")
     sp.add_argument("--show-message", action="store_true", help="also print the full message sent to Reactor")
     sp.set_defaults(fn=lambda a: __import__("pipeline.chat", fromlist=["cmd_chat"]).cmd_chat(a))
+    sp = sub.add_parser("serve", help="HTTP API for the web chat (web/): the chat steps as streamed JSON")
+    sp.add_argument("--split", default="dev", help="dev | test ... (default dev)")
+    sp.add_argument("--data", help="directory with the split's files (default: $PIPELINE_DATA_ROOT/<split>)")
+    sp.add_argument("--cache", help="embedding cache dir (default retriever/cache/<split>)")
+    sp.add_argument("--reranker", default="base", help="reranker loaded at start: base | v2-m3 | none")
+    sp.add_argument("--device", choices=["cuda", "cpu"], help="default: cuda if available")
+    provider_args(sp)
+    sp.add_argument("--max-chars", type=int, default=None, help="default message limit for the provider")
+    sp.add_argument("--dry-run", action="store_true", help="default for the web settings: do not call the provider")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8765)
+    sp.set_defaults(fn=lambda a: __import__("pipeline.server", fromlist=["cmd_serve"]).cmd_serve(a))
     return ap
 
 
