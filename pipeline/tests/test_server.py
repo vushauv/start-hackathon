@@ -135,3 +135,11 @@ def test_job_errors(web):
     r = c.post("/api/jobs", json={"split": "mini", "history_id": "h1", "question": "x"})
     job = c.get(f"/api/jobs/{r.json()['job_id']}").json()
     assert job["stage"] == "error" and "retriev" in job["error"]
+
+
+@pytest.mark.parametrize("bad", ["../mini", "..", "mini/../..", "a/b", "%2e%2e"])
+def test_split_name_cannot_escape(client, bad):
+    assert client.get("/api/questions", params={"split": bad}).status_code == 400
+    assert client.get("/api/people", params={"split": bad}).status_code == 400
+    assert client.post("/api/predict", json={"split": bad}).status_code in (400, 422)
+    assert client.post("/api/jobs", json={"split": bad, "history_id": "h1", "question": "x"}).status_code == 400

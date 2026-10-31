@@ -96,6 +96,16 @@ class Job:
                 "result": self.result, "error": self.error}
 
 
+SPLIT_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def check_split(name: str) -> str:
+    """A split name is used in file paths: letters, digits, ``_`` and ``-`` only (no ``..``, no separators)."""
+    if not isinstance(name, str) or not SPLIT_NAME.match(name):
+        raise HTTPException(400, "bad split name")
+    return name
+
+
 class State:
     """Everything the server keeps between requests. One Reactor conversation at a time (``lock``)."""
 
@@ -127,15 +137,20 @@ class State:
         return GROQ_DEFAULT_MAX_CHARS if provider == "groq" else 16000
 
     def split(self, name: str) -> Split:
+        check_split(name)
         if name not in self.splits:
             self.splits[name] = Split(split_dir(name, self.data))
         return self.splits[name]
 
     def paths(self, name: str) -> dict[str, Path]:
-        d = self.runs / name
+        check_split(name)
+        d = (self.runs / name).resolve()
+        if not d.is_relative_to(self.runs.resolve()):
+            raise HTTPException(400, "bad split name")
         return {k: d / f"{k}.jsonl" for k in ("evidence", "results", "predictions", "score_details")}
 
     def retrieval(self, name: str) -> FileRetrieval:
+        check_split(name)
         p = self.paths(name)["evidence"]
         if name not in self.evidence or self.evidence[name].path.stat().st_mtime != getattr(self, f"_mt_{name}", None):
             if not p.exists():
@@ -145,6 +160,7 @@ class State:
         return self.evidence[name]
 
     def local_retrieval(self, name: str) -> Retrieval:
+        check_split(name)
         if name not in self.local:
             try:
                 self.local[name] = LocalRetrieval(split_dir(name, self.data), device=self.device, log=lambda s: None)
@@ -183,6 +199,7 @@ class State:
 
     # ------------------------------------------------------------------ web app data
     def history(self, name: str, hid: str) -> dict:
+        check_split(name)
         key = (name, hid)
         if key not in self.histories:
             h = load_histories(self.split(name).dir / "histories.jsonl", {hid}).get(hid)
@@ -194,6 +211,7 @@ class State:
         return self.histories[key]
 
     def people(self, name: str) -> list[dict]:
+        check_split(name)
         if name not in self.people_cache:
             sp = self.split(name)
             by_h: dict[str, list[dict]] = {}
@@ -420,6 +438,7 @@ def create_app(state: State) -> FastAPI:
 
     @app.post("/api/jobs", status_code=202)
     def create_job(body: dict):
+        check_split(str(body.get("split") or ""))
         for k in ("split", "history_id", "question"):
             if not str(body.get(k) or "").strip():
                 raise HTTPException(400, f"missing {k}")
