@@ -1,12 +1,30 @@
 # Long-term Memory Benchmark Explorer
 
 Tooling around a LongMemEval-style conversational-memory dataset: given a user's
-long chat history (~48 sessions), answer questions about them. Services run via
-Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18.
-The Python client for the Reactor agent lives in `reactor_service/`, see
-[reactor_service/README.md](reactor_service/README.md).
-Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18 with
-pgvector, loaded and chunked by the scripts in `db/` ([`db/README.md`](db/README.md)).
+long chat history (~48 sessions), answer questions about them.
+
+**The end-to-end solution is `pipeline/`** ([pipeline/README.md](pipeline/README.md)):
+retrieval -> Reactor -> `predictions.jsonl` -> score. It joins the parts below.
+
+| Part | What it is |
+|---|---|
+| [`retriever/`](retriever/README.md) | hybrid session retriever (bge-small + BM25 + RRF) with a bge-reranker cross-encoder; GPU, run once per split |
+| [`embedder/`](embedder/README.md) | the standalone bge-small embedder and the experiment behind the chunking choice |
+| [`reactor_service/`](reactor_service/README.md) | Python client for the team's Reactor agent (message template, citations, retries) |
+| [`db/`](db/README.md) | PostgreSQL 18 + pgvector schema, loader and sentence-aware chunker (an alternative retrieval backend, not yet wired into the pipeline) |
+| [`frontend/`](frontend/README.md) | React dataset explorer |
+
+Services run via Docker Compose: the explorer and PostgreSQL.
+
+## Producing a submission
+
+```sh
+cd pipeline && uv sync
+uv run pipeline retrieve --split test        # GPU box: uv sync --extra retrieval first
+uv run pipeline answer   --split test        # needs reactor_service/.env with the Reactor handout
+uv run pipeline predict  --split test        # -> pipeline/runs/test/predictions.jsonl
+uv run pipeline score    --split dev         # dev only
+```
 
 ## Dataset
 

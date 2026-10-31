@@ -52,6 +52,7 @@ async def aask(
     question_date: str | None = None,
     history_id: str | None = None,
     question_id: str | None = None,
+    notes: str | None = None,
     timeout: float | None = None,
     settings: ReactorSettings | None = None,
 ) -> Answer:
@@ -62,9 +63,12 @@ async def aask(
         question_date=question_date,
         history_id=history_id,
         question_id=question_id,
+        notes=notes,
     )
     ref = new_ref()
-    text = _build_message(req.question, req.evidence, ref=ref, question_date=req.question_date)
+    text = _build_message(
+        req.question, req.evidence, ref=ref, question_date=req.question_date, notes=req.notes
+    )
     raw = await client.send(s, text, ref=ref, history_id=req.history_id, timeout=timeout)
     answer = raw.answer or ""
     abstained = is_abstention(answer)
@@ -150,10 +154,14 @@ def ask(
     question_date: str | None = None,
     history_id: str | None = None,
     question_id: str | None = None,
+    notes: str | None = None,
     timeout: float | None = None,
     settings: ReactorSettings | None = None,
 ) -> Answer:
-    """Ask one question with evidence and wait for the final, cited answer."""
+    """Ask one question with evidence and wait for the final, cited answer.
+
+    ``notes`` (optional) is sent after the evidence: date hints, answer-style rules.
+    """
     return _run(
         aask(
             question,
@@ -161,6 +169,7 @@ def ask(
             question_date=question_date,
             history_id=history_id,
             question_id=question_id,
+            notes=notes,
             timeout=timeout,
             settings=settings,
         )
@@ -199,10 +208,13 @@ def build_message(
     evidence: Iterable[EvidenceLike] = (),
     *,
     question_date: str | None = None,
+    notes: str | None = None,
     ref: str = "00000000",
 ) -> str:
     """The exact text :func:`ask` would send. Useful to check sizes before asking."""
-    return _build_message(question, _evidence(evidence), ref=ref, question_date=question_date)
+    return _build_message(
+        question, _evidence(evidence), ref=ref, question_date=question_date, notes=notes
+    )
 
 
 def split_history(

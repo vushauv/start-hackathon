@@ -18,3 +18,4 @@ retriever/cache/
 retriever/*.jsonl
 retriever/*.log
 __pycache__/
+pipeline/runs/
