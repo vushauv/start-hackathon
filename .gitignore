@@ -19,3 +19,4 @@ retriever/*.jsonl
 retriever/*.log
 __pycache__/
 pipeline/runs/
+pipeline/.env.groq

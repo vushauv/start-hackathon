@@ -131,3 +131,36 @@ default `base|best2|fused` config, so most of the remaining error is in answerin
 `uv run pytest` runs offline: unit tests of prompting and post-processing, and an end-to-end test of the loop
 against a fake Reactor (HTTP history endpoint + WebSocket chat) covering answers, abstention, uncited answers,
 timeouts, resume and scoring.
+
+## Interactive mode: `pipeline chat`
+
+A REPL that shows every step for one question: query embedding, the top-10 sessions from dense-B /
+dense-F / BM25, the RRF top 20, reranker scores and what moved, guessed type + k + date hint, the
+evidence passages, and (unless `--dry-run`) Reactor's full reply, final answer and citations.
+On dataset questions the gold answer is shown and gold evidence sessions are marked with ★.
+
+```bash
+cd pipeline
+./chat.sh --split dev --dry-run          # retrieval only, nothing sent to Reactor
+./chat.sh --split test                   # real Reactor calls (one at a time; ~40-120 s each)
+./chat.sh --split dev --history h_15a8be367c6b --device cpu
+# equivalent: PIPELINE_DATA_ROOT=... uv run --extra retrieval pipeline chat --split dev --cache ../retriever/cache/dev
+```
+
+`chat.sh` sets `PIPELINE_DATA_ROOT` (default `~/reactor-test/labeler/data`) and reuses
+`~/reactor-test/retriever/cache/<split>` if present. Needs the `retrieval` extra (torch).
+
+Commands inside the REPL:
+
+| input | effect |
+|---|---|
+| `:list` | list the split's histories |
+| `:h <history_id>` | switch history (indexes it; cached embeddings are reused) |
+| `:q <question_id>` | load a dataset question (switches history, sets its date) |
+| `:date YYYY-MM-DD` | set the question date (default: latest session of the history) |
+| `:exit` / Ctrl-D | quit |
+| anything else | ask it about the current history |
+
+Other flags: `--reranker base|v2-m3|none`, `--fusion fused|rerank`, `--show-message` (print the full
+message sent), `--max-chars`. Reactor serves one request per agent: don't use chat without `--dry-run`
+while a `pipeline answer` run is going.
