@@ -1,24 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { HistoryDetail, Meta } from "@/lib/types";
+import type { Meta } from "@/lib/types";
 import { IconClose, IconSearch } from "./icons";
-import { typeLabel } from "./format";
 
 interface Props {
   meta: Meta | null;
   historyId: string | null;
-  history: HistoryDetail | null;
-  loadingHistory: boolean;
+  recentChats: { historyId: string; question: string; updatedAt: number }[];
   open: boolean;
   onClose: () => void;
   onSelectHistory: (id: string) => void;
-  onAskDataset: (q: { id: string; question: string }) => void;
 }
 
-export function Sidebar({ meta, historyId, history, loadingHistory, open, onClose, onSelectHistory, onAskDataset }: Props) {
+export function Sidebar({ meta, historyId, recentChats, open, onClose, onSelectHistory }: Props) {
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"histories" | "questions">("histories");
 
   const histories = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -41,61 +37,52 @@ export function Sidebar({ meta, historyId, history, loadingHistory, open, onClos
         </button>
       </div>
 
-      <div className="tabs" role="tablist">
-        <button role="tab" aria-selected={tab === "histories"} onClick={() => setTab("histories")}>
-          Histories{meta ? <span className="count">{meta.histories.length}</span> : null}
-        </button>
-        <button role="tab" aria-selected={tab === "questions"} onClick={() => setTab("questions")}>
-          Questions{history ? <span className="count">{history.questions.length}</span> : null}
-        </button>
-      </div>
-
-      {tab === "histories" ? (
-        <>
-          <label className="search">
-            <IconSearch width={14} height={14} />
-            <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" />
-          </label>
-          <ul className="list">
-            {histories.map((h) => (
-              <li key={h.id}>
+      <label className="search">
+        <IconSearch width={14} height={14} />
+        <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search histories" />
+      </label>
+      {!query.trim() && recentChats.length ? (
+        <section className="recent-chats" aria-label="Recent conversations">
+          <p className="sidebar-label">Recent chats</p>
+          <ul className="recent-list">
+            {recentChats.slice(0, 6).map((chat) => (
+              <li key={chat.historyId}>
                 <button
-                  className={`list-item ${h.id === historyId ? "is-active" : ""}`}
+                  className={`recent-item ${chat.historyId === historyId ? "is-active" : ""}`}
                   onClick={() => {
-                    onSelectHistory(h.id);
+                    onSelectHistory(chat.historyId);
                     onClose();
                   }}
                 >
-                  <span className="list-title">
-                    <span>{h.id}</span>
-                    <span>{h.questions}</span>
-                  </span>
-                  <span className="list-sub">{h.first_question}</span>
+                  <span>{chat.question}</span>
+                  <small className="mono">{chat.historyId}</small>
                 </button>
               </li>
             ))}
-            {meta && histories.length === 0 ? <li className="list-empty">No matches</li> : null}
           </ul>
-        </>
-      ) : (
-        <ul className="list" style={{ paddingTop: 8 }}>
-          {loadingHistory ? <li className="list-empty">Indexing…</li> : null}
-          {history?.questions.map((q) => (
-            <li key={q.id}>
-              <button
-                className="list-item"
-                onClick={() => {
-                  onAskDataset(q);
-                  onClose();
-                }}
-              >
-                <span className="list-q">{q.question}</span>
-                <span className="list-sub">{q.type ? typeLabel(q.type) : q.id}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+        </section>
+      ) : null}
+      <p className="sidebar-label">All histories{meta ? <span>{meta.histories.length}</span> : null}</p>
+      <ul className="list">
+        {histories.map((h) => (
+          <li key={h.id}>
+            <button
+              className={`list-item ${h.id === historyId ? "is-active" : ""}`}
+              onClick={() => {
+                onSelectHistory(h.id);
+                onClose();
+              }}
+            >
+              <span className="list-title">
+                <span>{h.id}</span>
+                <span>{h.questions}</span>
+              </span>
+              <span className="list-sub">{h.first_question}</span>
+            </button>
+          </li>
+        ))}
+        {meta && histories.length === 0 ? <li className="list-empty">No matches</li> : null}
+      </ul>
     </aside>
   );
 }

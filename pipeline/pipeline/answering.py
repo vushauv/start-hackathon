@@ -92,6 +92,11 @@ class ReactorAnswerer:
                 last = e
                 self.log(f"{r.question_id}: {type(e).__name__} on attempt {attempt}: {e}")
                 if isinstance(e, Closed):
+                    # A closed socket can leave the server-side history in an
+                    # unusable state. Start clean before the next attempt rather
+                    # than sending another request to the closed history.
+                    if attempt < self.attempts:
+                        self.start_history(r.history_id)
                     time.sleep(3)
         assert last is not None
         raise last

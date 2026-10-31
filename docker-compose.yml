@@ -131,6 +131,13 @@ services:
     restart: unless-stopped
     env_file:
       - ${REACTOR_ENV_FILE:-.env}
+      # API keys remain host-only, ignored files.  The trace UI can switch to
+      # OpenAI/Groq at runtime, so pass those optional credential files through
+      # instead of baking them into the image.
+      - path: ${OPENAI_ENV_FILE:-./pipeline/.env.openai}
+        required: false
+      - path: ${GROQ_ENV_FILE:-./pipeline/.env.groq}
+        required: false
     environment:
       HF_HOME: /cache/huggingface
       TRANSFORMERS_CACHE: /cache/huggingface

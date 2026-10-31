@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ask, fetchHistory, fetchMeta } from "@/lib/api";
-import type { HistoryDetail, Meta, Settings, StreamEvent, Turn } from "@/lib/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ask, fetchMeta } from "@/lib/api";
+import type { Meta, Settings, StreamEvent, Turn } from "@/lib/types";
 import { Sidebar } from "@/components/Sidebar";
 import { Composer } from "@/components/Composer";
 import { Message } from "@/components/Message";
 import { SettingsDrawer } from "@/components/SettingsDrawer";
 import { IconMenu, IconSliders } from "@/components/icons";
-import { shortDate, typeLabel } from "@/components/format";
+import { shortDate } from "@/components/format";
 
 const SETTINGS_KEY = "recall.settings.v1";
+const THREADS_KEY = "recall.threads.v1";
 
 const FALLBACK: Settings = {
   reranker: "base",
@@ -32,6 +33,41 @@ function loadStored(): Partial<Settings> {
   } catch {
     return {};
   }
+}
+
+/** Keep prior chat answers, not bulky retrieval traces or hidden reasoning. */
+function loadThreads(): Record<string, Turn[]> {
+  if (typeof window === "undefined") return {};
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(THREADS_KEY) ?? "{}");
+    if (!value || typeof value !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).flatMap(([historyId, turns]) => {
+        if (!Array.isArray(turns)) return [];
+        const safe = turns.filter((turn): turn is Turn =>
+          !!turn && typeof turn === "object" && typeof (turn as Turn).id === "string" && typeof (turn as Turn).question === "string",
+        );
+        return safe.length ? [[historyId, safe]] : [];
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function compactThreads(threads: Record<string, Turn[]>): Record<string, Turn[]> {
+  return Object.fromEntries(
+    Object.entries(threads).map(([historyId, turns]) => [
+      historyId,
+      // Avoid filling localStorage with long evidence excerpts. The trace is live-only;
+      // restored conversations retain the user question, answer, status, and citations.
+      turns.slice(-40).map(({ steps: _steps, waiting: _waiting, gold: _gold, answer, ...turn }) => ({
+        ...turn,
+        steps: {},
+        answer: answer ? { ...answer, reasoning: undefined, reply: undefined } : undefined,
+      })),
+    ]),
+  );
 }
 
 function apply(t: Turn, e: StreamEvent): Turn {
@@ -59,9 +95,7 @@ export default function Home() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryDetail | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [threads, setThreads] = useState<Record<string, Turn[]>>({});
+  const [threads, setThreads] = useState<Record<string, Turn[]>>(loadThreads);
   const [settings, setSettings] = useState<Settings>(FALLBACK);
   const [questionDate, setQuestionDate] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -71,6 +105,13 @@ export default function Home() {
   const scroller = useRef<HTMLDivElement>(null);
 
   const turns = (historyId && threads[historyId]) || [];
+  const recentChats = useMemo(
+    () => Object.entries(threads)
+      .filter(([, items]) => items.length > 0)
+      .map(([id, items]) => ({ historyId: id, question: items.at(-1)?.question ?? "New conversation", updatedAt: items.at(-1)?.startedAt ?? 0 }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
+    [threads],
+  );
 
   const connect = useCallback(() => {
     setMetaError(null);
@@ -95,19 +136,12 @@ export default function Home() {
   }, [settings, meta]);
 
   useEffect(() => {
-    if (!historyId) return;
-    let live = true;
-    setLoadingHistory(true);
-    setHistory(null);
-    setQuestionDate("");
-    fetchHistory(historyId)
-      .then((h) => live && setHistory(h))
-      .catch((e: Error) => live && setMetaError(e.message))
-      .finally(() => live && setLoadingHistory(false));
-    return () => {
-      live = false;
-    };
-  }, [historyId]);
+    try {
+      localStorage.setItem(THREADS_KEY, JSON.stringify(compactThreads(threads)));
+    } catch {
+      /* storage quota unavailable: the active chat remains usable */
+    }
+  }, [threads]);
 
   useEffect(() => {
     const el = scroller.current;
@@ -149,12 +183,10 @@ export default function Home() {
       <Sidebar
         meta={meta}
         historyId={historyId}
-        history={history}
-        loadingHistory={loadingHistory}
+        recentChats={recentChats}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onSelectHistory={setHistoryId}
-        onAskDataset={(q) => run(q.question, q.id)}
       />
 
       <main className="main">
@@ -164,15 +196,12 @@ export default function Home() {
           </button>
           <div className="topbar-title">
             <span className="mono">{historyId ?? "–"}</span>
-            {history ? (
+            {questionDate ? (
               <span className="topbar-meta">
-                {history.sessions} sessions ·{" "}
                 <button onClick={() => setSettingsOpen(true)} title="Change question date">
-                  {questionDate ? shortDate(questionDate.replaceAll("-", "/")) : shortDate(history.question_date)}
+                  {shortDate(questionDate.replaceAll("-", "/"))}
                 </button>
               </span>
-            ) : loadingHistory ? (
-              <span className="topbar-meta">Indexing…</span>
             ) : null}
           </div>
           <div className="topbar-actions">
@@ -185,7 +214,7 @@ export default function Home() {
                 disabled={busy}
                 onClick={() => historyId && setThreads((all) => ({ ...all, [historyId]: [] }))}
               >
-                Clear
+                New chat
               </button>
             ) : null}
             <button className="btn" onClick={() => setSettingsOpen(true)}>
@@ -211,29 +240,12 @@ export default function Home() {
 
             {turns.length === 0 ? (
               <div className="intro">
-                <h1>Ask about this history</h1>
+                <h1>What would you like to remember?</h1>
                 <p>
-                  {history
-                    ? `${history.sessions} sessions of past conversations. Answers cite the sessions they use.`
-                    : loadingHistory
-                      ? "Indexing sessions…"
-                      : "Select a history to begin."}
+                  {historyId
+                    ? "Ask a question to search this history. Retrieval and evidence will appear only after you send it."
+                    : "Choose a history from the sidebar, then ask a question."}
                 </p>
-                {history?.questions.length ? (
-                  <>
-                    <p className="section-label">From the dataset</p>
-                    <ul className="qlist">
-                      {history.questions.slice(0, 6).map((q) => (
-                        <li key={q.id}>
-                          <button disabled={busy} onClick={() => run(q.question, q.id)}>
-                            <span className="q-text">{q.question}</span>
-                            <small>{q.type ? typeLabel(q.type) : q.id}</small>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : null}
               </div>
             ) : (
               <div className="thread">
@@ -247,7 +259,7 @@ export default function Home() {
 
         <Composer
           busy={busy}
-          disabled={!history}
+          disabled={!historyId}
           settings={settings}
           onSubmit={(t) => run(t)}
           onStop={() => abort.current?.abort()}
@@ -260,7 +272,7 @@ export default function Home() {
         meta={meta}
         settings={settings}
         questionDate={questionDate}
-        latestDate={history?.question_date ?? ""}
+        latestDate=""
         onChange={setSettings}
         onQuestionDate={setQuestionDate}
         onReset={() => {
