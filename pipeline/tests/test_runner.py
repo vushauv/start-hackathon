@@ -6,6 +6,7 @@ from pipeline import Policy, run, write_predictions
 from pipeline.answering import DryRunAnswerer, ReactorAnswerer
 from pipeline.data import write_jsonl
 from pipeline.retrieval import FileRetrieval
+from pipeline.runner import reset_verification, verify_existing
 from pipeline.scoring import score
 
 QUESTIONS = [
@@ -66,7 +67,8 @@ def test_end_to_end(tmp_path, fake_reactor):
     assert again == [] and len(srv.messages) == 3
 
     preds = write_predictions(results, tmp_path / "predictions.jsonl", questions=QUESTIONS,
-                              policy=Policy(), sessions=SESSIONS, log=lambda s: None)
+                              policy=Policy(fallback_citations=1, abstain_citations=1),
+                              sessions=SESSIONS, log=lambda s: None)
     lines = [json.loads(l) for l in (tmp_path / "predictions.jsonl").read_text().splitlines()]
     assert lines == [
         {"question_id": "q1", "abstain": False, "answer": "June", "citations": ["s_b"]},
@@ -92,7 +94,8 @@ def test_no_answer_is_recorded_and_missing_filled(tmp_path, fake_reactor):
     assert out[0].status == "no-answer" and out[0].error.split(":")[0] in ("TimedOut", "Closed")
     assert out[0].attempts == 2 and len(srv.messages) == 2  # retried once, then gave up
 
-    preds = write_predictions(results, tmp_path / "p.jsonl", questions=QUESTIONS, log=lambda s: None)
+    preds = write_predictions(results, tmp_path / "p.jsonl", questions=QUESTIONS,
+                              policy=Policy(abstain_citations=1), log=lambda s: None)
     assert [p.abstain for p in preds] == [True, True, True]
     assert preds[2].citations == ["s_d"] and preds[0].citations == []
 
@@ -103,3 +106,50 @@ def test_dry_run(tmp_path):
     out = run(QUESTIONS, FileRetrieval(ev), DryRunAnswerer(), tmp_path / "r.jsonl", log=lambda s: None)
     assert [r.cited_ids for r in out] == [["s_a"], ["s_c"], ["s_d"]]
     assert all(r.message_chars > 0 for r in out)
+
+
+def test_stateless_answerer_can_run_in_parallel(tmp_path):
+    ev = tmp_path / "evidence.jsonl"
+    write_jsonl(ev, EVIDENCE)
+    results = tmp_path / "parallel-results.jsonl"
+
+    out = run(QUESTIONS, FileRetrieval(ev), DryRunAnswerer(), results, workers=3, log=lambda s: None)
+
+    assert {r.question_id for r in out} == {"q1", "q2", "q3"}
+    assert len([json.loads(line) for line in results.read_text().splitlines()]) == 3
+
+
+def test_verifier_can_turn_an_unsupported_answer_into_an_abstention(tmp_path):
+    class UnsupportedAnswerer(DryRunAnswerer):
+        def verify(self, r, composed, answer):
+            return "unsupported"
+
+    ev = tmp_path / "evidence.jsonl"
+    write_jsonl(ev, EVIDENCE[:1])
+
+    out = run(QUESTIONS[:1], FileRetrieval(ev), UnsupportedAnswerer(), tmp_path / "results.jsonl", log=lambda s: None)
+
+    assert out[0].status == "abstained"
+    assert out[0].answer_raw == "INSUFFICIENT_EVIDENCE"
+    assert out[0].verification == "unsupported"
+
+
+def test_verify_existing_updates_saved_answer_without_reasking(tmp_path):
+    class UnsupportedVerifier(DryRunAnswerer):
+        def verify_candidate(self, r, composed, answer_text, cited_ids):
+            return "unsupported"
+
+    ev = tmp_path / "evidence.jsonl"
+    results = tmp_path / "results.jsonl"
+    write_jsonl(ev, EVIDENCE[:1])
+    run(QUESTIONS[:1], FileRetrieval(ev), DryRunAnswerer(), results, log=lambda s: None)
+
+    out = verify_existing(QUESTIONS[:1], FileRetrieval(ev), UnsupportedVerifier(), results, log=lambda s: None)
+
+    assert out[0].status == "abstained"
+    assert out[0].verification == "unsupported"
+
+    assert reset_verification(results) == 1
+    restored = [json.loads(line) for line in results.read_text().splitlines()]
+    assert restored[0]["status"] == "answered"
+    assert restored[0]["verification"] == "not-run"

@@ -20,3 +20,5 @@ retriever/*.log
 __pycache__/
 pipeline/runs/
 pipeline/.env.groq
+pipeline/.env.groq.old
+pipeline/.env.openai

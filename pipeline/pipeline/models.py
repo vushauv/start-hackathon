@@ -61,6 +61,7 @@ class QuestionResult(BaseModel):
     latency_s: float = 0.0
     retries: int = 0
     attempts: int = 1
+    verification: str = "not-run"  # supported | unsupported | unverified | not-run
 
 
 class Prediction(BaseModel):

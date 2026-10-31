@@ -218,7 +218,7 @@ class Chat:
             con.print(f"[magenta]gold answer:[/] {g}   [magenta]gold evidence:[/] {', '.join(gold.get('evidence', []))}")
 
     def _who(self) -> str:
-        return f"Groq {self.a.model}" if self.a.provider == "groq" else "Reactor"
+        return f"{self.a.provider} {self.a.model or 'default'}" if self.a.provider != "reactor" else "Reactor"
 
     def _reactor(self, r: Retrieved, comp) -> None:
         from reactor_service import NoAnswer
@@ -229,7 +229,7 @@ class Chat:
                                             log=lambda s: con.print(f"[dim]{s}[/]"))
         t0 = time.perf_counter()
         try:
-            wait = "a few seconds" if self.a.provider == "groq" else "typically 40-120 s"
+            wait = "a few seconds" if self.a.provider != "reactor" else "typically 40-120 s"
             with con.status(f"waiting for {self._who()} ({wait}) ..."):
                 if self.reactor_hid_for != self.hid:
                     self.answerer.start_history(self.hid)

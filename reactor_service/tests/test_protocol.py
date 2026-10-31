@@ -15,6 +15,8 @@ def test_build_message_labels_and_ref():
     assert "[E1] (id=s_1, date=2023/05/20 (Sat) 02:21)" in m
     assert "[E2] (id=s_2" in m
     assert "Question date: 2023-06-01" in m
+    assert "Today is: 2023-06-01. Use this benchmark question date as the sole reference" in m
+    assert "[user] [2023/05/20 (Sat) 02:21] We booked the hall for May." in m
     assert "# FINAL ANSWER [ref:deadbeef]:" in m
     assert "INSUFFICIENT_EVIDENCE" in m
 

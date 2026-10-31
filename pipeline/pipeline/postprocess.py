@@ -13,13 +13,14 @@ from dataclasses import dataclass
 from .models import Prediction, QuestionResult
 
 _LABELS = re.compile(r"\s*\[\s*E\d+(?:\s*[,;]\s*E\d+)*\s*\]")
+_ANSWER_PREFIX = re.compile(r"^(?:the\s+answer\s+is|answer:|it\s+is)\s+", re.IGNORECASE)
 
 
 def strip_labels(answer: str) -> str:
     """The answer without its ``[E#]`` / ``[E1, E3]`` labels, spacing tidied (same as the kit)."""
     text = _LABELS.sub("", answer)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return _ANSWER_PREFIX.sub("", re.sub(r"\s+", " ", text).strip())
 
 
 @dataclass

@@ -20,17 +20,18 @@ from .answering import GROQ_DEFAULT_MAX_CHARS, GROQ_DEFAULT_MODEL, make_answerer
 from .data import Split, split_dir
 from .postprocess import Policy
 from .prompting import compose
-from .retrieval import FileRetrieval, LocalRetrieval, save_evidence
-from .runner import run, write_predictions
+from .retrieval import FileRetrieval, InMemoryRetrieval, LocalRetrieval, save_evidence, widen_evidence
+from .runner import latest_results, reconcile_results, reset_verification, run, verify_existing, write_predictions
 
 RUNS = Path(__file__).resolve().parent.parent / "runs"
 
 
 def _provider_defaults(a: argparse.Namespace) -> None:
     """Fill --model / --max-chars from the provider when not given."""
-    groq = getattr(a, "provider", "reactor") == "groq"
+    groq = getattr(a, "provider", "reactor") in ("groq", "openai")
     if hasattr(a, "model") and not a.model and groq:
-        a.model = GROQ_DEFAULT_MODEL
+        from .answering import OPENAI_DEFAULT_MODEL
+        a.model = OPENAI_DEFAULT_MODEL if a.provider == "openai" else GROQ_DEFAULT_MODEL
     if hasattr(a, "max_chars") and a.max_chars is None:
         a.max_chars = GROQ_DEFAULT_MAX_CHARS if groq else 16000
 
@@ -38,8 +39,8 @@ def _provider_defaults(a: argparse.Namespace) -> None:
 def _out_dir(a: argparse.Namespace) -> Path:
     """runs/<split>/ for Reactor; runs/<split>/groq/<model>/ for Groq, so the two never mix."""
     d = RUNS / a.split
-    if getattr(a, "provider", "reactor") == "groq":
-        d = d / "groq" / (getattr(a, "model", None) or GROQ_DEFAULT_MODEL).replace("/", "_")
+    if getattr(a, "provider", "reactor") in ("groq", "openai"):
+        d = d / a.provider / (getattr(a, "model", None) or GROQ_DEFAULT_MODEL).replace("/", "_")
     return d
 
 
@@ -75,7 +76,8 @@ def cmd_retrieve(a: argparse.Namespace) -> int:
     d = split_dir(a.split, a.data)
     split = Split(d)
     ret = LocalRetrieval(d, a.cache, reranker=None if a.reranker == "none" else a.reranker,
-                         rerank_text=a.rerank_text, fusion=a.fusion, device=a.device, log=_log)
+                         rerank_text=a.rerank_text, fusion=a.fusion, device=a.device, log=_log,
+                         rerank_threshold=None if a.rerank_threshold == "none" else float(a.rerank_threshold))
     rows = ret.retrieve(_questions(split, a))
     out = _paths(a)["evidence"]
     save_evidence(rows, out)
@@ -90,6 +92,23 @@ def cmd_answer(a: argparse.Namespace) -> int:
     qs = _questions(split, a)
     p["results"].parent.mkdir(parents=True, exist_ok=True)
     retrieval = FileRetrieval(p["evidence"])
+    if a.repair_results:
+        repaired = reconcile_results(p["results"])
+        _log(f"reconciled {repaired} duplicate result row(s)" if repaired else "results already reconciled")
+    if a.reset_verification:
+        restored = reset_verification(p["results"])
+        _log(f"restored {restored} pre-verifier result row(s)" if restored else "no pre-verifier results found")
+    retry_ids: set[str] | None = None
+    if a.retry_abstentions:
+        latest = latest_results(p["results"])
+        retry_ids = {qid for qid, result in latest.items() if result.status == "abstained"}
+        qs = [q for q in qs if q["question_id"] in retry_ids]
+        rows = retrieval.retrieve(qs)
+        histories = split.histories()
+        retrieval = InMemoryRetrieval(
+            widen_evidence(row, histories[row.history_id], a.widen_evidence) for row in rows
+        )
+        _log(f"retrying {len(qs)} explicit abstention(s) with up to {a.widen_evidence} candidate sessions")
     if a.dry_run:
         rows = retrieval.retrieve(qs)
         sizes = [compose(r, a.max_chars).chars for r in rows]
@@ -98,10 +117,16 @@ def cmd_answer(a: argparse.Namespace) -> int:
         if a.show:
             print(compose(rows[0], a.max_chars).message)
         return 0
-    answerer = make_answerer(a.provider, model=a.model, attempts=a.attempts, timeout=a.timeout, log=_log)
-    _log(f"provider {a.provider}" + (f", model {a.model}" if a.provider == "groq" else "")
+    answerer = make_answerer(a.provider, model=a.model, attempts=a.attempts, timeout=a.timeout,
+                             verify_answers=a.verify_answers or a.verify_existing, log=_log)
+    _log(f"provider {a.provider}" + (f", model {a.model}" if a.provider != "reactor" else "")
          + f", max-chars {a.max_chars} -> {p['results']}")
-    run(qs, retrieval, answerer, p["results"], max_chars=a.max_chars, log=_log)
+    if a.verify_existing:
+        verify_existing(qs, retrieval, answerer, p["results"], max_chars=a.max_chars,
+                        workers=a.workers, log=_log)
+        return 0
+    run(qs, retrieval, answerer, p["results"], max_chars=a.max_chars, workers=a.workers,
+        retry_ids=retry_ids, log=_log)
     return 0
 
 
@@ -147,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def provider_args(sp):
-        sp.add_argument("--provider", choices=["reactor", "groq"], default="reactor",
+        sp.add_argument("--provider", choices=["reactor", "groq", "openai"], default="reactor",
                         help="who answers (default reactor). groq: files go to runs/<split>/groq/<model>/")
         sp.add_argument("--model", help=f"groq model (default {GROQ_DEFAULT_MODEL})")
 
@@ -168,6 +193,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--reranker", default="base", help="base | v2-m3 | none")
         sp.add_argument("--rerank-text", default="best2", choices=["best1", "best2"])
         sp.add_argument("--fusion", default="fused", choices=["fused", "rerank"])
+        sp.add_argument("--rerank-threshold", default="-5.5",
+                        help="send every session with reranker score >= this (top-1 always); 'none' = per-type top-k")
         sp.add_argument("--device", default="cuda")
 
     def answer_args(sp):
@@ -175,6 +202,20 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"message limit (default 16000 for reactor, server allows 32000; {GROQ_DEFAULT_MAX_CHARS} for groq)")
         sp.add_argument("--attempts", type=int, help="tries per question before giving up (default 3 reactor, 6 groq)")
         sp.add_argument("--timeout", type=float, help="seconds to wait per try (default REACTOR_TIMEOUT; 180 for groq)")
+        sp.add_argument("--workers", type=int, default=1,
+                        help="concurrent OpenAI/Groq requests (default 1; Reactor must remain 1)")
+        sp.add_argument("--verify-answers", action="store_true",
+                        help="use a second OpenAI/Groq pass to abstain on unsupported answers")
+        sp.add_argument("--verify-existing", action="store_true",
+                        help="verify saved answers without re-asking the original questions")
+        sp.add_argument("--reset-verification", action="store_true",
+                        help="restore saved results from before --verify-existing was run")
+        sp.add_argument("--repair-results", action="store_true",
+                        help="compact duplicate results, keeping valid answers over later transport failures")
+        sp.add_argument("--retry-abstentions", action="store_true",
+                        help="re-ask only current INSUFFICIENT_EVIDENCE results with broader evidence")
+        sp.add_argument("--widen-evidence", type=int, default=12,
+                        help="candidate sessions supplied on an abstention retry (default 12)")
         sp.add_argument("--dry-run", action="store_true", help="compose messages, report sizes, send nothing")
         sp.add_argument("--show", action="store_true", help="with --dry-run: print the first message")
 
