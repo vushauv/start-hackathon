@@ -27,12 +27,9 @@ def strip_labels(answer: str) -> str:
 class Policy:
     """What to submit when the agent did not answer cleanly.
 
-    * ``fallback_citations``: an answered question whose answer cites nothing gets the first n sent
-      passages as citations (evidence F1 is scored on every answerable question; the top passage is
-      the best bet).
-    * ``abstain_citations``: an abstention keeps the agent's citations if it made any, else the first n
-      sent passages. For a truly unanswerable question citations are not scored, so this only helps
-      when the abstention was wrong.
+    * An answered question submits one citation: the first LLM-selected session, or the top retrieved
+      passage when the LLM selected none.
+    * Abstentions submit no citations. This keeps the submission contract unambiguous.
     * ``abstain_on_no_answer``: a question with no final answer (timeout, closed, refused after retries)
       is submitted as an abstention; otherwise as an empty answer (scored wrong either way, but an
       abstention is right for the ~8% unanswerable).
@@ -57,13 +54,9 @@ def to_prediction(r: QuestionResult, policy: Policy = Policy(), known: set[str] 
     sent = _dedupe(r.sent_ids, known)
     if r.status == "no-answer":
         if policy.abstain_on_no_answer:
-            return Prediction(question_id=r.question_id, abstain=True, answer="",
-                              citations=sent[: policy.abstain_citations])
+            return Prediction(question_id=r.question_id, abstain=True, answer="", citations=[])
         return Prediction(question_id=r.question_id, abstain=False, answer="", citations=sent[:1])
     if r.status == "abstained":
-        return Prediction(question_id=r.question_id, abstain=True, answer="",
-                          citations=cited or sent[: policy.abstain_citations])
+        return Prediction(question_id=r.question_id, abstain=True, answer="", citations=[])
     answer = strip_labels(r.answer_raw)
-    if not cited:
-        cited = sent[: policy.fallback_citations]
-    return Prediction(question_id=r.question_id, abstain=False, answer=answer, citations=cited)
+    return Prediction(question_id=r.question_id, abstain=False, answer=answer, citations=(cited[:1] or sent[:1]))

@@ -90,7 +90,7 @@ def build_message(
         f"Finish with one line that starts exactly with `# FINAL ANSWER [ref:{ref}]:` "
         "followed by valid JSON with exactly `answer` and `citations` fields. "
         "`citations` must be an array of only the evidence session IDs that directly support the final answer; "
-        "do not cite retrieved but unused sessions. "
+        "do not cite retrieved but unused sessions, and put the single strongest source first. "
         f"For example: `# FINAL ANSWER [ref:{ref}]: {{\"answer\":\"June\",\"citations\":[\"s_abc\"]}}`. "
         f"If the evidence does not answer the question, write "
         f"`# FINAL ANSWER [ref:{ref}]: {{\"answer\":\"{ABSTAIN}\",\"citations\":[]}}` instead. "
