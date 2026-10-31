@@ -60,7 +60,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
-  background: var(--bg);
+  background: radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 33rem), var(--bg);
   color: var(--text);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   font-size: var(--fs-md);
@@ -221,7 +221,7 @@ button:disabled { cursor: default; }
 .link[aria-expanded="true"] { color: var(--text); }
 
 /* ------------------------------------------------------------------ trace */
-.trace { margin-top: var(--s4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.trace { margin-top: var(--s4); overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 12px 32px rgba(24, 24, 27, .04); }
 .trace-head {
   display: flex; align-items: center; gap: var(--s2); width: 100%; height: 36px; padding: 0 var(--s3);
   font-size: var(--fs-xs); color: var(--text-2);
@@ -230,6 +230,44 @@ button:disabled { cursor: default; }
 .chev { color: var(--text-3); transition: transform 0.15s var(--ease); }
 .trace.is-open .chev { transform: rotate(90deg); }
 .trace-head .push { margin-left: auto; color: var(--text-3); }
+
+/* Live system map. Each card represents a real stage in the NDJSON stream and
+   opens that stage's payload; the vault branches visualise the hybrid search. */
+.retrieval-map {
+  display: flex; align-items: center; gap: 0; overflow-x: auto; padding: var(--s4) var(--s3) var(--s5);
+  border-top: 1px solid var(--border); background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent-soft) 42%, transparent), transparent 45%),
+    repeating-linear-gradient(0deg, transparent 0 25px, color-mix(in srgb, var(--border) 50%, transparent) 26px),
+    var(--bg);
+}
+.graph-origin, .graph-node { flex: 0 0 116px; min-height: 76px; }
+.graph-origin {
+  display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 10px; border: 1px solid var(--border-strong);
+  border-radius: 9px; background: var(--surface); box-shadow: 0 4px 14px rgba(24, 24, 27, .06);
+}
+.graph-origin-kicker, .graph-vault-title { color: var(--accent); font: 600 9px/1 var(--font-mono), ui-monospace, monospace; letter-spacing: .08em; }
+.graph-origin strong { display: -webkit-box; overflow: hidden; color: var(--text-2); font-size: 11px; font-weight: 500; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.graph-link { position: relative; flex: 0 0 22px; height: 1px; background: var(--border-strong); }
+.graph-link::after { content: ""; position: absolute; top: -3px; right: -1px; width: 6px; height: 6px; border-top: 1px solid var(--border-strong); border-right: 1px solid var(--border-strong); transform: rotate(45deg); }
+.graph-link-main { animation: data-flow 2.2s linear infinite; background: linear-gradient(90deg, var(--border-strong), var(--accent), var(--border-strong)); background-size: 200% 100%; }
+.graph-node {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding: 10px 10px 10px 23px;
+  text-align: left; border: 1px solid var(--border); border-radius: 9px; background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+  box-shadow: 0 3px 10px rgba(24, 24, 27, .04); transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease);
+}
+.graph-node:not(:disabled):hover, .graph-node.is-selected { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 12%, transparent); }
+.graph-node:disabled { opacity: .55; }
+.graph-node-dot { position: absolute; left: 9px; top: 50%; width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transform: translateY(-50%); }
+.graph-node.is-done .graph-node-dot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.graph-node.is-active .graph-node-dot { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; box-shadow: 0 0 0 4px var(--accent-soft); }
+.graph-node-label { font-size: 11px; font-weight: 600; line-height: 1.2; }
+.graph-node-detail { max-width: 100%; overflow: hidden; color: var(--text-3); font-size: 10px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.graph-vault-wrap { position: relative; flex: 0 0 116px; padding-top: 17px; }
+.graph-vault-title { position: absolute; top: 3px; left: 2px; }
+.vault-branches { display: flex; gap: 3px; margin-top: 5px; padding: 0 2px; }
+.vault-branches span { flex: 1; overflow: hidden; padding: 3px 1px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-3); font: 8px/1 var(--font-mono), monospace; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.vault-branches span.is-live { border-color: color-mix(in srgb, var(--accent) 32%, var(--border)); color: var(--accent); background: var(--accent-soft); }
+@keyframes data-flow { to { background-position: -200% 0; } }
 
 .steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
 .step + .step { border-top: 1px solid var(--border); }
@@ -399,5 +437,6 @@ button:disabled { cursor: default; }
   .channels { grid-template-columns: 1fr; }
   .step-head { grid-template-columns: 16px 1fr auto; }
   .step-sum { display: none; }
+  .retrieval-map { margin: 0 -1px; padding-left: var(--s3); }
   .question { flex-direction: column; gap: var(--s1); }
 }
