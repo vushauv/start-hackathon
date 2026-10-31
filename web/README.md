@@ -77,3 +77,17 @@ docker compose --profile api --profile tunnel up -d
 
 The public hostname exposes the application and can spend provider quota. Add a Cloudflare Access policy or
 other authentication before sharing it broadly.
+
+## MCP server
+
+The optional `memory-mcp` service exposes the persistent backend through Streamable HTTP MCP at
+`http://localhost:8001/mcp`. It has tools to list/create/resume conversations and ask configured dataset questions.
+
+```sh
+docker compose --profile api --profile mcp up -d --build
+```
+
+The web app also publishes these connection instructions at `/mcp`. To make MCP remotely available, add another
+Cloudflare Tunnel public hostname whose service is `http://memory-mcp:8001`, then connect an MCP client to
+`https://mcp.your-domain.example/mcp`. Put Cloudflare Access in front of that hostname; do not expose the MCP
+answer tool anonymously.

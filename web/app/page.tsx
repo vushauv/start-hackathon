@@ -176,6 +176,9 @@ export default function Home() {
             ) : null}
           </div>
           <div className="topbar-actions">
+            <a className="btn btn-text hide-mobile" href="/mcp">
+              MCP guide
+            </a>
             {turns.length ? (
               <button
                 className="btn btn-text hide-mobile"

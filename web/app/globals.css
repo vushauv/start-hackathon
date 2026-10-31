@@ -116,6 +116,23 @@ button:disabled { cursor: default; }
 
 .only-mobile { display: none; }
 
+/* ------------------------------------------------------------------ MCP guide */
+.docs-shell { width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 72px 0 96px; }
+.docs-back { color: var(--text-2); font-size: var(--fs-sm); text-decoration: none; }
+.docs-back:hover { color: var(--accent); }
+.docs-kicker { margin: 44px 0 8px; color: var(--accent); font: 600 11px/1 var(--font-mono), monospace; letter-spacing: .1em; }
+.docs-shell h1 { max-width: 650px; margin: 0; font-size: clamp(30px, 5vw, 48px); line-height: 1.06; letter-spacing: -.04em; }
+.docs-lede { max-width: 650px; margin: 18px 0 38px; color: var(--text-2); font-size: var(--fs-lg); line-height: 1.65; }
+.docs-card { margin-top: 14px; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 12px 32px rgba(24, 24, 27, .035); }
+.docs-card h2 { margin: 0 0 12px; font-size: var(--fs-lg); letter-spacing: -.015em; }
+.docs-card p, .docs-card li { color: var(--text-2); font-size: var(--fs-sm); line-height: 1.6; }
+.docs-card p { margin: 10px 0 0; }
+.docs-card ul { margin: 0; padding-left: 20px; }
+.docs-card code { padding: 2px 5px; border-radius: 4px; background: var(--subtle); color: var(--accent); font: 12px var(--font-mono), monospace; word-break: break-all; }
+.docs-card pre { overflow-x: auto; margin: 14px 0 0; padding: 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text-2); font: 12px/1.55 var(--font-mono), monospace; }
+.docs-warning { margin-top: 16px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); border-radius: 9px; background: color-mix(in srgb, var(--warn) 7%, var(--surface)); color: var(--text-2); font-size: var(--fs-sm); line-height: 1.55; }
+.docs-warning strong { color: var(--text); }
+
 /* ------------------------------------------------------------------ shell */
 .app { display: grid; grid-template-columns: var(--sidebar) 1fr; height: 100dvh; overflow: hidden; }
 
