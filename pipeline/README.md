@@ -164,3 +164,45 @@ Commands inside the REPL:
 Other flags: `--reranker base|v2-m3|none`, `--fusion fused|rerank`, `--show-message` (print the full
 message sent), `--max-chars`. Reactor serves one request per agent: don't use chat without `--dry-run`
 while a `pipeline answer` run is going.
+
+## Web app backend (`pipeline ui`)
+
+The backend of the reading room in `frontend/`: pick a person, ask a question, get the answer plus the
+sentences it rests on; a click on a quote opens that session at the exact turn.
+
+```sh
+uv sync --extra ui --extra retrieval            # retrieval needs torch; the CPU build is fine for the test split
+uv run pipeline ui --split test --provider reactor            # http://127.0.0.1:8001
+uv run pipeline ui --split test --provider groq               # seconds instead of 40-120 s per answer
+uv run pipeline ui --split test --dry-run                     # no Reactor/Groq: the first passage is cited
+```
+
+`--device auto|cuda|cpu` picks the retriever device (CPU converts the models to fp32). Questions are retrieved
+live with the same `LocalRetrieval` as `pipeline retrieve`, so it needs the embedding cache
+(`retriever/cache/<split>/`); the first request loads the models.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/meta`, `GET /api/people?split=` | provider/device, and one entry per history (name guess, dates, its dataset questions as suggestions) |
+| `GET /api/history`, `GET /api/session` | session list (no turns) and one full session with `prev`/`next` |
+| `POST /api/jobs` `{split, history_id, question, question_date?, provider?}` | start a question, `202 {job_id}` |
+| `GET /api/jobs/{id}` | `stage` (queued, retrieving, answering, locating, done, error) and, when done, the result |
+
+A result has `answer`, `abstained`, and `citations[]`; each citation is a session with `quotes[]`
+`{turn_id, turn_index, role, start, end, text}`, where `start`/`end` are character offsets inside that turn's
+content. `pipeline/quotes.py` finds them by scoring the turns of each cited session against the question and
+the answer (numbers and dates weigh most) and picking the best sentence. Reactor cites sessions only, so the
+quote is the best match inside the cited session, not something Reactor said.
+
+One question runs at a time (Reactor's rule); the others wait in the queue. Live questions are not written
+to `results.jsonl`. The older runner page (`GET /`, `/api/questions`, `/api/ask`, `/api/predict`) still works.
+
+Frontend: `cd frontend && npm install && npm run dev`; `/api` is proxied to `API_URL` (default
+`http://127.0.0.1:8001`; `docker compose` points it at the host). The dataset explorer is at `#/explore`.
+
+### Sessions from PostgreSQL
+
+`pipeline ui` reads a person's session list and transcripts from the `db/` schema when it is reachable
+(`docker compose up -d --wait postgres`, then `python db/load.py --split test`). Connection: `$DATABASE_URL` or the
+`POSTGRES_*` values of the repo `.env`. Without psycopg or a database it falls back to the dataset files;
+`/api/history` reports which one it used in `source`. Retrieval itself still runs on the files.

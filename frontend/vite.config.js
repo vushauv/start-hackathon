@@ -107,6 +107,7 @@ const dataPlugin = {
 export default defineConfig({
   plugins: [react(), dataPlugin],
   server: {
+    proxy: { '/api': { target: process.env.API_URL || 'http://127.0.0.1:8001', changeOrigin: true } },
     watch: process.env.USE_POLLING ? { usePolling: true, interval: 300 } : undefined,
   },
 })

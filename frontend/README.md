@@ -34,3 +34,20 @@ histories file, cached). The browser (`src/lib/jsonl.js`) then:
   (filters and search load the rest on demand);
 - fetches a single history with one Range request when a question is selected;
 - renders session turns only when a session is expanded.
+
+## Reading room (default screen)
+
+`#/` is a question-and-answer view over one person's history, served by `pipeline ui` (see
+`pipeline/README.md`). Routes: `#/h/<history_id>` for a person, and
+`#/h/<history_id>?s=<session_id>&t=<turn_id>&a=<start>&b=<end>` for a session opened at a quoted sentence
+(the link is shareable). The previous dataset explorer lives at `#/explore`; its styles are scoped to
+`.explorer` in `src/explore/explore.css`. Run the backend first; `/api` is proxied by `vite.config.js`
+to `API_URL` (default `http://127.0.0.1:8001`).
+
+## Chat (OpenUI)
+
+The home page (`#/`) is an [OpenUI](https://www.openui.com/) `AgentInterface` chat (`src/chat/`).
+Type `/` in the composer to pick a tool. `/recall <question>` sends the text through the pipeline's
+retrieval and answering job (`/api/jobs`) and replies with the answer plus the quoted sentences it
+rests on. Each quote links to `#/h/<history>?s=<session>&t=<turn>` and opens that conversation in the
+side pane. A message without a known `/tool` gets a hint. Conversations are per person and not persisted.

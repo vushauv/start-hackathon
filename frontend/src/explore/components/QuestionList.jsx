@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useRecords } from '../lib/useRecords.js'
+import { useRecords } from '../../lib/useRecords.js'
 
 const PAGE = 50
 const TYPES = [

@@ -9,8 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@openuidev/react-headless": "^0.18.1",
+    "@openuidev/react-lang": "^1.0.2",
+    "@openuidev/react-ui": "^0.18.1",
+    "ai": "^7.0.159",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7",
+    "zustand": "^4.5.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.2",

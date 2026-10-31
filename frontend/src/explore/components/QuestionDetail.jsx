@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { loadByKey } from '../lib/jsonl.js'
+import { loadByKey } from '../../lib/jsonl.js'
 
 const LIMIT = 1500
 

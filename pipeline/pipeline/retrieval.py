@@ -52,6 +52,11 @@ class LocalRetrieval:
     def __init__(self, split_dir: str | Path, cache_dir: str | Path | None = None, *,
                  reranker: str | None = "base", rerank_text: str = "best2", fusion: str = "fused",
                  device: str = "cuda", log: Callable[[str], None] = print):
+        if device == "auto":
+            import torch  # noqa: PLC0415
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device
         if str(RETRIEVER_DIR) not in sys.path:
             sys.path.insert(0, str(RETRIEVER_DIR))
         import retriever as R  # noqa: PLC0415  (heavy: torch, sentence-transformers)
@@ -61,6 +66,10 @@ class LocalRetrieval:
         cache_dir = Path(cache_dir) if cache_dir else RETRIEVER_DIR / "cache" / split_dir.name
         self.impl = R.Retriever(str(split_dir), str(cache_dir), reranker=reranker or None,
                                 rerank_text_mode=rerank_text, fusion=fusion, device=device, log=log)
+        if device == "cpu":  # fp16 is slow / partly unsupported on CPU
+            self.impl.emb.m.float()
+            if self.impl.rr:
+                self.impl.rr.m.float()
 
     def retrieve(self, questions: list[dict]) -> list[Retrieved]:
         return [Retrieved.model_validate(r) for r in self.impl.run(questions)]
