@@ -1,5 +1,8 @@
 services:
   postgres:
+    # Kept for the older benchmark explorer below. The production memory UI
+    # uses file-backed evidence and does not need this database.
+    profiles: ["legacy"]
     image: pgvector/pgvector:pg18 # PostgreSQL 18 with the pgvector extension
     restart: unless-stopped
     environment:
@@ -17,6 +20,9 @@ services:
       retries: 10
 
   frontend:
+    # Older static benchmark explorer. Its root-level JSONL mounts are not
+    # part of the application stack; start explicitly with --profile legacy.
+    profiles: ["legacy"]
     build: ./frontend
     ports:
       - "127.0.0.1:5173:5173" # dev server: local machine only
