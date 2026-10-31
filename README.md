@@ -2,7 +2,7 @@
 
 Tooling around a LongMemEval-style conversational-memory dataset: given a user's
 long chat history (~48 sessions), answer questions about them. Services run via
-Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18.
+Docker Compose: a React + TypeScript dataset explorer (`frontend/`) and PostgreSQL 18.
 
 ## Dataset
 

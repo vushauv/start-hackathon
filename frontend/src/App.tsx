@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import QuestionList from './components/QuestionList.jsx'
-import QuestionDetail from './components/QuestionDetail.jsx'
+import type { QuestionSelection } from './types'
+import QuestionList from './components/QuestionList'
+import QuestionDetail from './components/QuestionDetail'
 
 export default function App() {
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected] = useState<QuestionSelection | null>(null)
   return (
     <div className="app">
       <aside>

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { loadByKey } from '../lib/jsonl.js'
+import { loadByKey } from '../lib/jsonl'
+import type { History, QuestionSelection, Session as HistorySession, Turn as HistoryTurn } from '../types'
+import { toError } from '../lib/errors'
 
 const LIMIT = 1500
 
-function Turn({ turn }) {
+function Turn({ turn }: { turn: HistoryTurn }) {
   const [full, setFull] = useState(false)
   const long = turn.content.length > LIMIT
   const text = full || !long ? turn.content : turn.content.slice(0, LIMIT) + '…'
@@ -20,7 +22,13 @@ function Turn({ turn }) {
   )
 }
 
-function Session({ session, evidence, defaultOpen }) {
+interface SessionProps {
+  session: HistorySession
+  evidence: boolean
+  defaultOpen: boolean
+}
+
+function Session({ session, evidence, defaultOpen }: SessionProps) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <section className={`session ${evidence ? 'evidence' : ''}`}>
@@ -36,16 +44,16 @@ function Session({ session, evidence, defaultOpen }) {
   )
 }
 
-export default function QuestionDetail({ question, gold }) {
-  const [history, setHistory] = useState(null)
-  const [error, setError] = useState(null)
+export default function QuestionDetail({ question, gold }: QuestionSelection) {
+  const [history, setHistory] = useState<History | null>(null)
+  const [error, setError] = useState<Error | null>(null)
   const [onlyEvidence, setOnlyEvidence] = useState(false)
 
   useEffect(() => {
     let live = true
     loadByKey('histories', question.history_id).then(
       (h) => live && setHistory(h),
-      (e) => live && setError(e),
+      (e: unknown) => live && setError(toError(e)),
     )
     return () => {
       live = false
