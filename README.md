@@ -2,6 +2,9 @@
 
 Tooling around a LongMemEval-style conversational-memory dataset: given a user's
 long chat history (~48 sessions), answer questions about them. Services run via
+Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18.
+The Python client for the Reactor agent lives in `reactor_service/`, see
+[reactor_service/README.md](reactor_service/README.md).
 Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18 with
 pgvector, loaded and chunked by the scripts in `db/` ([`db/README.md`](db/README.md)).
 
