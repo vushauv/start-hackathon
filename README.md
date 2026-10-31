@@ -13,6 +13,7 @@ retrieval -> Reactor -> `predictions.jsonl` -> score. It joins the parts below.
 | [`reactor_service/`](reactor_service/README.md) | Python client for the team's Reactor agent (message template, citations, retries) |
 | [`db/`](db/README.md) | PostgreSQL 18 + pgvector schema, loader and sentence-aware chunker (an alternative retrieval backend, not yet wired into the pipeline) |
 | [`frontend/`](frontend/README.md) | React dataset explorer |
+| [`web/`](web/README.md) | Next.js chat UI over the pipeline (`pipeline serve`), with a retrieval trace and settings drawer |
 
 Services run via Docker Compose: the explorer and PostgreSQL.
 

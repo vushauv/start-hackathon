@@ -19,5 +19,5 @@ RUN uv sync --no-dev --extra api
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/pipeline/.venv/bin/pipeline", "serve"]
+ENTRYPOINT ["/app/pipeline/.venv/bin/pipeline", "api-serve"]
 CMD ["--split", "dev", "--data", "/data", "--evidence", "/evidence/evidence.jsonl", "--state", "/state/conversations.jsonl", "--host", "0.0.0.0", "--port", "8000"]

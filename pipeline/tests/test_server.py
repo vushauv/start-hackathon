@@ -1,7 +1,7 @@
 from pipeline.answering import DryRunAnswerer
 from pipeline.models import Evidence, Retrieved
 from pipeline.retrieval import InMemoryRetrieval
-from pipeline.server import PipelineService
+from pipeline.reactor_api import PipelineService
 
 
 QUESTION = {"question_id": "q1", "history_id": "h1", "question": "What is my pet called?"}

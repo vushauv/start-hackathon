@@ -130,7 +130,7 @@ The service serializes requests because one Reactor agent can process only one a
 ```sh
 cd pipeline
 uv sync --extra api
-uv run --extra api pipeline serve --split dev --data ../dev --evidence runs/dev/evidence.jsonl
+uv run --extra api pipeline api-serve --split dev --data ../dev --evidence runs/dev/evidence.jsonl
 ```
 
 `GET /health` confirms the configured service. `POST /v1/dataset/answers/{question_id}` retrieves the matching
