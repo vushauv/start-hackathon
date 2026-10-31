@@ -5,6 +5,8 @@ long chat history (~48 sessions), answer questions about them. Services run via
 Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18.
 The Python client for the Reactor agent lives in `reactor_service/`, see
 [reactor_service/README.md](reactor_service/README.md).
+Docker Compose: a React dataset explorer (`frontend/`) and PostgreSQL 18 with
+pgvector, loaded and chunked by the scripts in `db/` ([`db/README.md`](db/README.md)).
 
 ## Dataset
 
@@ -72,3 +74,15 @@ Postgres data persists in the `postgres_data` volume. Connect with:
 ```
 psql "postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:$POSTGRES_PORT/$POSTGRES_DB"
 ```
+
+## Database: load and chunk
+
+With the splits in `data/` and `postgres` running:
+
+```
+python3 -m venv .venv && .venv/bin/pip install -r db/requirements.txt
+.venv/bin/python db/load.py --split dev      # data/dev -> schema dev
+.venv/bin/python db/chunk.py --split dev     # sentence-aware chunks, no embeddings
+```
+
+Details in [`db/README.md`](db/README.md).
