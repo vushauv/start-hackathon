@@ -93,6 +93,67 @@ services:
       retries: 5
       start_period: 15s
 
+  # Browser-facing Next.js application. It keeps both internal APIs private
+  # and proxies their streamed replies through the same origin.
+  memory-web:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      memory-api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MEMORY_WEB_PORT:-3000}:3000"
+    environment:
+      MEMORY_API_URL: http://memory-api:8000
+      # The trace service is optional. /api requests show a clear error until
+      # it is started with the trace profile below.
+      PIPELINE_API_URL: http://trace-api:8765
+
+  # Live retrieval inspector: emits NDJSON events for embedding, hybrid search,
+  # reranking, evidence packing, and the final Reactor response. It is kept
+  # separate because it needs the retrieval/GPU dependencies and model cache.
+  trace-api:
+    profiles: ["trace"]
+    build:
+      context: .
+      dockerfile: pipeline/Dockerfile
+      args:
+        INSTALL_RETRIEVAL: "1"
+    restart: unless-stopped
+    env_file:
+      - ${REACTOR_ENV_FILE:-.env}
+    environment:
+      HF_HOME: /cache/huggingface
+      TRANSFORMERS_CACHE: /cache/huggingface
+    entrypoint: ["/app/pipeline/.venv/bin/pipeline", "serve"]
+    command:
+      - --split
+      - ${PIPELINE_SPLIT:-dev}
+      - --data
+      - /data
+      - --cache
+      - /cache/retriever
+      - --device
+      - ${PIPELINE_DEVICE:-cuda}
+      - --provider
+      - reactor
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8765"
+    volumes:
+      - type: bind
+        source: ${PIPELINE_DATA_DIR:-./dev}
+        target: /data
+        read_only: true
+        bind: { create_host_path: false }
+      - retriever_cache:/cache
+    gpus: all
+
 volumes:
   postgres_data:
   pipeline_service_state:
+  retriever_cache:

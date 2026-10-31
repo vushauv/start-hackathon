@@ -6,6 +6,7 @@ dense/BM25 → RRF, reranker, type/k/hints, packed evidence and the composed mes
 
 ```
 browser ──► Next.js (web/, :3000) ──/api/*──► pipeline serve (:8765) ──► retriever + Reactor / Groq / OpenAI
+                                      └─/memory-api/*──► FastAPI (:8000) ──► saved Reactor conversations
 ```
 
 ## Run
@@ -42,3 +43,16 @@ applied per question and remembered in the browser:
 - The server handles one question at a time (models and Reactor are shared); a second request waits
   and the UI says it is queued.
 - Indexing a history is slow the first time on CPU (~80 s); vectors are cached in `retriever/cache/<split>/`.
+
+## Docker
+
+Start the persistent API and UI with `docker compose --profile api up --build`. It exposes the UI at
+`http://localhost:3000`, and proxies saved conversation endpoints at `/memory-api/v1/conversations`.
+For the full animated retrieval graph, start the GPU trace service too:
+
+```sh
+docker compose --profile api --profile trace up --build
+```
+
+The trace service needs an NVIDIA-enabled Docker runtime. It persists downloaded models and embeddings in
+the `retriever_cache` volume; subsequent starts reuse them.

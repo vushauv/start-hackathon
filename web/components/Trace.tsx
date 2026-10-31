@@ -282,7 +282,7 @@ export function Trace({ turn, defaultOpen }: { turn: Turn; defaultOpen: boolean 
     <section className={`trace ${open ? "is-open" : ""}`}>
       <button className="trace-head" onClick={() => setOpen(!open)} aria-expanded={open}>
         <IconChevron className="chev" width={12} height={12} />
-        Retrieval trace
+        Retrieval graph
         <span className="push mono">{total != null ? ms(total) : `${done}/${STEP_ORDER.length}`}</span>
       </button>
       {open ? (

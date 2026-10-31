@@ -233,14 +233,24 @@ button:disabled { cursor: default; }
 
 .steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
 .step + .step { border-top: 1px solid var(--border); }
+.step { position: relative; }
+.step:not(:last-child)::after {
+  content: ""; position: absolute; z-index: 1; left: 20px; bottom: -9px; width: 1px; height: 18px;
+  background: var(--border-strong);
+}
 .step-head {
   display: grid; grid-template-columns: 16px 200px 1fr auto; align-items: center; gap: var(--s3); width: 100%;
   padding: var(--s2) var(--s3); text-align: left; font-size: var(--fs-sm); transition: background 0.15s;
 }
 .step-head:hover:not(:disabled) { background: var(--subtle); }
-.step-n { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--text-3); }
+.step-n {
+  position: relative; z-index: 2; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid var(--border-strong); background: var(--surface); font-family: var(--font-mono), monospace;
+  font-size: 10px; color: var(--text-3); transition: color .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease);
+}
+.step.is-done .step-n { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .step.is-pending .step-title { color: var(--text-3); }
-.step.is-active .step-n { color: var(--accent); }
+.step.is-active .step-n { color: var(--on-accent); border-color: var(--accent); background: var(--accent); animation: node-pulse 1.25s ease-in-out infinite; }
 .step-sum { color: var(--text-3); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .step-ms { color: var(--text-3); font-size: 11px; }
 
@@ -369,6 +379,7 @@ button:disabled { cursor: default; }
 /* ------------------------------------------------------------------ motion */
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pulse { 50% { opacity: 0.3; } }
+@keyframes node-pulse { 50% { box-shadow: 0 0 0 5px var(--accent-soft); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 /* ------------------------------------------------------------------ responsive */
