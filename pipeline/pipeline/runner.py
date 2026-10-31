@@ -100,11 +100,13 @@ def answer_one(r: Retrieved, answerer: Answerer, max_chars: int, reactor_history
                               attempts=getattr(answerer, "attempts", 1), **base)
     verify = getattr(answerer, "verify", None)
     verification = verify(r, c, a) if callable(verify) and not a.abstained else "not-run"
-    unsupported = verification == "unsupported"
+    # Verification is diagnostic only.  A strict second pass was turning supported
+    # answers into false abstentions, especially when the answer combined passages.
+    # The original answerer remains the sole abstention decision-maker.
     return QuestionResult(
-        status="abstained" if a.abstained or unsupported else "answered",
-        answer_raw="INSUFFICIENT_EVIDENCE" if unsupported else a.answer,
-        cited_ids=[] if unsupported else a.cited_ids,
+        status="abstained" if a.abstained else "answered",
+        answer_raw=a.answer,
+        cited_ids=a.cited_ids,
         unknown_citations=a.unknown_citations, uncited=a.uncited, reply=a.reply,
         other_replies=a.other_replies, late_replies=a.late_replies, latency_s=a.latency_s,
         retries=a.retries, attempts=attempts, verification=verification, **base,
@@ -177,11 +179,6 @@ def verify_existing(questions: list[dict], retrieval: Retrieval, answerer: Answe
         previous = current[q["question_id"]]
         composed = compose(retrieved[q["question_id"]], max_chars)
         verdict = verify(retrieved[q["question_id"]], composed, previous.answer_raw, previous.cited_ids)
-        if verdict == "unsupported":
-            return previous.model_copy(update={
-                "status": "abstained", "answer_raw": "INSUFFICIENT_EVIDENCE", "cited_ids": [],
-                "uncited": False, "verification": verdict,
-            })
         return previous.model_copy(update={"verification": verdict})
 
     out: list[QuestionResult] = []

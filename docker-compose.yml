@@ -159,6 +159,40 @@ services:
       - retriever_cache:/cache
     gpus: all
 
+  # Standard Streamable HTTP MCP server. It is loopback-bound on the host by
+  # default; expose it only through an authenticated Cloudflare hostname.
+  memory-mcp:
+    profiles: ["mcp"]
+    build:
+      context: .
+      dockerfile: pipeline/Dockerfile
+      args:
+        INSTALL_MCP: "1"
+    restart: unless-stopped
+    depends_on:
+      memory-api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MCP_PORT:-8001}:8001"
+    environment:
+      MEMORY_API_URL: http://memory-api:8000
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8001"
+    entrypoint: ["/app/pipeline/.venv/bin/python", "-m", "pipeline.mcp_server"]
+
+  # Public ingress for the browser UI only. Create a named, remotely-managed
+  # Cloudflare Tunnel and configure its public hostname in the Cloudflare
+  # dashboard to route to http://memory-web:3000. The token stays in local
+  # .env (which is ignored) and must never be committed.
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      memory-web:
+        condition: service_started
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+
 volumes:
   postgres_data:
   pipeline_service_state:

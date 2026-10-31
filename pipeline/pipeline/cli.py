@@ -100,6 +100,8 @@ def cmd_answer(a: argparse.Namespace) -> int:
         restored = reset_verification(p["results"])
         _log(f"restored {restored} pre-verifier result row(s)" if restored else "no pre-verifier results found")
     retry_ids: set[str] | None = None
+    if a.retry_abstentions and a.retry_uncited:
+        raise ValueError("--retry-abstentions and --retry-uncited cannot be combined")
     if a.retry_abstentions:
         latest = latest_results(p["results"])
         retry_ids = {qid for qid, result in latest.items() if result.status == "abstained"}
@@ -110,6 +112,11 @@ def cmd_answer(a: argparse.Namespace) -> int:
             widen_evidence(row, histories[row.history_id], a.widen_evidence) for row in rows
         )
         _log(f"retrying {len(qs)} explicit abstention(s) with up to {a.widen_evidence} candidate sessions")
+    elif a.retry_uncited:
+        latest = latest_results(p["results"])
+        retry_ids = {qid for qid, result in latest.items() if result.status == "answered" and result.uncited}
+        qs = [q for q in qs if q["question_id"] in retry_ids]
+        _log(f"retrying {len(qs)} answered question(s) without model-selected citations")
     if a.dry_run:
         rows = retrieval.retrieve(qs)
         sizes = [compose(r, a.max_chars).chars for r in rows]
@@ -227,6 +234,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="compact duplicate results, keeping valid answers over later transport failures")
         sp.add_argument("--retry-abstentions", action="store_true",
                         help="re-ask only current INSUFFICIENT_EVIDENCE results with broader evidence")
+        sp.add_argument("--retry-uncited", action="store_true",
+                        help="re-ask only answered results lacking model-selected citations")
         sp.add_argument("--widen-evidence", type=int, default=12,
                         help="candidate sessions supplied on an abstention retry (default 12)")
         sp.add_argument("--dry-run", action="store_true", help="compose messages, report sizes, send nothing")

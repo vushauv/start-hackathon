@@ -119,7 +119,7 @@ def test_stateless_answerer_can_run_in_parallel(tmp_path):
     assert len([json.loads(line) for line in results.read_text().splitlines()]) == 3
 
 
-def test_verifier_can_turn_an_unsupported_answer_into_an_abstention(tmp_path):
+def test_verifier_is_advisory_and_keeps_an_unsupported_answer(tmp_path):
     class UnsupportedAnswerer(DryRunAnswerer):
         def verify(self, r, composed, answer):
             return "unsupported"
@@ -129,8 +129,8 @@ def test_verifier_can_turn_an_unsupported_answer_into_an_abstention(tmp_path):
 
     out = run(QUESTIONS[:1], FileRetrieval(ev), UnsupportedAnswerer(), tmp_path / "results.jsonl", log=lambda s: None)
 
-    assert out[0].status == "abstained"
-    assert out[0].answer_raw == "INSUFFICIENT_EVIDENCE"
+    assert out[0].status == "answered"
+    assert out[0].answer_raw == "(dry run) [E1]"
     assert out[0].verification == "unsupported"
 
 
@@ -146,7 +146,7 @@ def test_verify_existing_updates_saved_answer_without_reasking(tmp_path):
 
     out = verify_existing(QUESTIONS[:1], FileRetrieval(ev), UnsupportedVerifier(), results, log=lambda s: None)
 
-    assert out[0].status == "abstained"
+    assert out[0].status == "answered"
     assert out[0].verification == "unsupported"
 
     assert reset_verification(results) == 1

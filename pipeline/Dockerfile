@@ -4,6 +4,7 @@ FROM python:3.12-slim
 # The persistent conversation API needs only ``api``. The optional trace
 # service enables this at build time so it can load the retriever and reranker.
 ARG INSTALL_RETRIEVAL=0
+ARG INSTALL_MCP=0
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -23,8 +24,12 @@ COPY reactor_service /app/reactor_service
 COPY retriever /app/retriever
 
 WORKDIR /app/pipeline
-RUN if [ "$INSTALL_RETRIEVAL" = "1" ]; then \
+RUN if [ "$INSTALL_RETRIEVAL" = "1" ] && [ "$INSTALL_MCP" = "1" ]; then \
+      uv sync --no-dev --extra api --extra retrieval --extra mcp; \
+    elif [ "$INSTALL_RETRIEVAL" = "1" ]; then \
       uv sync --no-dev --extra api --extra retrieval; \
+    elif [ "$INSTALL_MCP" = "1" ]; then \
+      uv sync --no-dev --extra api --extra mcp; \
     else \
       uv sync --no-dev --extra api; \
     fi

@@ -202,16 +202,16 @@ class GroqAnswerer:
     def start_history(self, dataset_history_id: str) -> str:
         return f"{self.PREFIX}-{dataset_history_id}"
 
-    def _payload(self, text: str) -> dict:
+    def _payload(self, text: str, *, reasoning_effort: str | None = None) -> dict:
         p = {"model": self.model, "messages": [{"role": "user", "content": text}], "temperature": 0,
              "max_completion_tokens": self.max_completion_tokens}
         if self.model.startswith("openai/gpt-oss") and self.reasoning_effort:
-            p["reasoning_effort"] = self.reasoning_effort
+            p["reasoning_effort"] = reasoning_effort or self.reasoning_effort
         return p
 
     def ask(self, r: Retrieved, composed: Composed) -> tuple[Answer, int]:
         from reactor_service.api import _evidence
-        from reactor_service.protocol import citations, final_answers, is_abstention, new_ref
+        from reactor_service.protocol import final_answers, final_output, is_abstention, new_ref
 
         ev = _evidence([e.model_dump() for e in composed.evidence])
         ref = new_ref()
@@ -222,7 +222,12 @@ class GroqAnswerer:
         for attempt in range(1, self.attempts + 1):
             t0 = time.perf_counter()
             try:
-                resp = self._client.post("/chat/completions", json=self._payload(text))
+                # Spend extra deliberation only on questions that require combining
+                # dated or multiple sessions; direct fact lookups stay fast and cheap.
+                effort = self.reasoning_effort
+                if r.guessed_type in ("temporal-reasoning", "multi-session"):
+                    effort = os.environ.get("OPENAI_REASONING_EFFORT_HARD", "medium")
+                resp = self._client.post("/chat/completions", json=self._payload(text, reasoning_effort=effort))
             except httpx.HTTPError as e:
                 last = f"{type(e).__name__}: {e}"
                 self.log(f"{r.question_id}: network error on attempt {attempt}: {last}")
@@ -253,8 +258,8 @@ class GroqAnswerer:
                 self.log(f"{r.question_id}: {last} on attempt {attempt}")
                 retries += 1
                 continue
+            answer, cited, unknown = final_output(answer, ev)
             abstained = is_abstention(answer)
-            cited, unknown = citations(answer, ev)
             a = Answer(answer=answer, abstained=abstained, citations=cited, unknown_citations=unknown,
                        uncited=bool(ev) and not cited and not abstained, reply=content, cycle=0,
                        latency_s=round(latency, 3), retries=retries, ref=ref, question=r.question,
@@ -317,11 +322,11 @@ class OpenAIAnswerer(GroqAnswerer):
     def _key(self) -> str:
         return _env_key("OPENAI_API_KEY", OPENAI_ENV_FILE)
 
-    def _payload(self, text: str) -> dict:
+    def _payload(self, text: str, *, reasoning_effort: str | None = None) -> dict:
         p = {"model": self.model, "messages": [{"role": "user", "content": text}],
              "max_completion_tokens": self.max_completion_tokens}
         if self.model.startswith(("gpt-5", "gpt-6", "o")):
-            p["reasoning_effort"] = self.reasoning_effort
+            p["reasoning_effort"] = reasoning_effort or self.reasoning_effort
         else:
             p["temperature"] = 0
         return p

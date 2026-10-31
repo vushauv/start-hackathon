@@ -21,15 +21,24 @@ def test_answered_keeps_agent_citations():
 
 def test_answered_uncited_falls_back_to_top_sent():
     p = to_prediction(result(cited_ids=[], uncited=True), Policy(fallback_citations=2))
-    assert p.citations == ["s_1", "s_2"]
-    assert to_prediction(result(cited_ids=[]), Policy(fallback_citations=0)).citations == []
+    assert p.citations == ["s_1"]
+    assert to_prediction(result(cited_ids=[]), Policy(fallback_citations=0)).citations == ["s_1"]
 
 
 def test_abstained():
     p = to_prediction(result(status="abstained", answer_raw="INSUFFICIENT_EVIDENCE", cited_ids=[]))
-    assert p.abstain and p.answer == "" and p.citations == ["s_1"]
+    assert p.abstain and p.answer == "" and p.citations == []
     p = to_prediction(result(status="abstained", cited_ids=["s_3"]))
-    assert p.citations == ["s_3"]
+    assert p.citations == []
+
+
+def test_answered_uses_only_the_strongest_model_selected_citation():
+    assert to_prediction(result(cited_ids=["s_3", "s_2"])).citations == ["s_3"]
+
+
+def test_multi_session_keeps_bounded_model_selected_citations():
+    p = to_prediction(result(guessed_type="multi-session", cited_ids=["s_3", "s_2", "s_1"]))
+    assert p.citations == ["s_3", "s_2", "s_1"]
 
 
 def test_no_answer_policy():

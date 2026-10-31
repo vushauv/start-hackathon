@@ -271,6 +271,80 @@ function Detail({ id, data }: { id: StepId; data: StepMap[StepId] }) {
   }
 }
 
+function nodeState(turn: Turn, id: StepId): "done" | "active" | "pending" {
+  if (turn.steps[id]) return "done";
+  if (turn.phase === "retrieving" && !STEP_ORDER.find((step) => !turn.steps[step])) return "pending";
+  return turn.phase === "retrieving" && STEP_ORDER.find((step) => !turn.steps[step]) === id ? "active" : "pending";
+}
+
+function GraphNode({
+  id,
+  label,
+  detail,
+  turn,
+  selected,
+  onSelect,
+}: {
+  id: StepId;
+  label: string;
+  detail: string;
+  turn: Turn;
+  selected: boolean;
+  onSelect: (id: StepId) => void;
+}) {
+  const state = nodeState(turn, id);
+  return (
+    <button
+      className={`graph-node is-${state} ${selected ? "is-selected" : ""}`}
+      disabled={!turn.steps[id]}
+      onClick={() => onSelect(id)}
+      aria-pressed={selected}
+      title={turn.steps[id] ? `Open ${label} details` : `${label} has not run yet`}
+    >
+      <span className="graph-node-dot" />
+      <span className="graph-node-label">{label}</span>
+      <span className="graph-node-detail mono">{detail}</span>
+    </button>
+  );
+}
+
+function RetrievalMap({ turn, step, onSelect }: { turn: Turn; step: StepId | null; onSelect: (id: StepId) => void }) {
+  const first = turn.steps.first_stage?.data;
+  const rerank = turn.steps.rerank?.data;
+  const evidence = turn.steps.evidence?.data;
+  const compose = turn.steps.compose?.data;
+  const kept = rerank?.order.filter((item) => item.selected).length;
+
+  return (
+    <div className="retrieval-map" aria-label="Live retrieval data-flow graph">
+      <div className="graph-origin">
+        <span className="graph-origin-kicker">MEMORY QUERY</span>
+        <strong>{turn.question}</strong>
+      </div>
+      <span className="graph-link graph-link-main" aria-hidden="true" />
+      <GraphNode id="embedding" label="Embed" detail={turn.steps.embedding ? `${turn.steps.embedding.data.dim}d` : "waiting"} turn={turn} selected={step === "embedding"} onSelect={onSelect} />
+      <span className="graph-link graph-link-main" aria-hidden="true" />
+      <div className="graph-vault-wrap">
+        <span className="graph-vault-title">MEMORY VAULT</span>
+        <GraphNode id="first_stage" label="Hybrid search" detail={first ? `${first.candidates.length} candidates` : "dense + BM25"} turn={turn} selected={step === "first_stage"} onSelect={onSelect} />
+        <div className="vault-branches" aria-hidden="true">
+          <span className={turn.steps.first_stage ? "is-live" : ""}>Dense</span>
+          <span className={turn.steps.first_stage ? "is-live" : ""}>BM25</span>
+          <span className={turn.steps.first_stage ? "is-live" : ""}>RRF</span>
+        </div>
+      </div>
+      <span className="graph-link graph-link-main" aria-hidden="true" />
+      <GraphNode id="rerank" label="Rerank" detail={kept != null ? `${kept} kept` : "waiting"} turn={turn} selected={step === "rerank"} onSelect={onSelect} />
+      <span className="graph-link graph-link-main" aria-hidden="true" />
+      <GraphNode id="selection" label="Decision" detail={turn.steps.selection ? typeLabel(turn.steps.selection.data.guessed_type) : "waiting"} turn={turn} selected={step === "selection"} onSelect={onSelect} />
+      <span className="graph-link graph-link-main" aria-hidden="true" />
+      <GraphNode id="evidence" label="Evidence" detail={evidence ? `${evidence.passages.length} passages` : "waiting"} turn={turn} selected={step === "evidence"} onSelect={onSelect} />
+      <span className="graph-link graph-link-main" aria-hidden="true" />
+      <GraphNode id="compose" label="LLM context" detail={compose ? `${num(compose.chars)} chars` : "waiting"} turn={turn} selected={step === "compose"} onSelect={onSelect} />
+    </div>
+  );
+}
+
 export function Trace({ turn, defaultOpen }: { turn: Turn; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   const [step, setStep] = useState<StepId | null>(null);
@@ -286,27 +360,30 @@ export function Trace({ turn, defaultOpen }: { turn: Turn; defaultOpen: boolean 
         <span className="push mono">{total != null ? ms(total) : `${done}/${STEP_ORDER.length}`}</span>
       </button>
       {open ? (
-        <ol className="steps">
-          {STEP_ORDER.map((id, i) => {
-            const s = turn.steps[id];
-            const state = s ? "done" : id === active ? "active" : "pending";
-            return (
-              <li key={id} className={`step is-${state}`}>
-                <button className="step-head" disabled={!s} onClick={() => setStep(step === id ? null : id)} aria-expanded={step === id}>
-                  <span className="step-n">{i + 1}</span>
-                  <span className="step-title">{TITLES[id]}</span>
-                  <span className="step-sum">{s ? summary(id, s.data) : state === "active" ? "Running…" : ""}</span>
-                  <span className="step-ms mono">{s && s.ms ? ms(s.ms) : ""}</span>
-                </button>
-                {s && step === id ? (
-                  <div className="detail">
-                    <Detail id={id} data={s.data} />
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
+        <>
+          <RetrievalMap turn={turn} step={step} onSelect={(id) => setStep(step === id ? null : id)} />
+          <ol className="steps">
+            {STEP_ORDER.map((id, i) => {
+              const s = turn.steps[id];
+              const state = s ? "done" : id === active ? "active" : "pending";
+              return (
+                <li key={id} className={`step is-${state}`}>
+                  <button className="step-head" disabled={!s} onClick={() => setStep(step === id ? null : id)} aria-expanded={step === id}>
+                    <span className="step-n">{i + 1}</span>
+                    <span className="step-title">{TITLES[id]}</span>
+                    <span className="step-sum">{s ? summary(id, s.data) : state === "active" ? "Running…" : ""}</span>
+                    <span className="step-ms mono">{s && s.ms ? ms(s.ms) : ""}</span>
+                  </button>
+                  {s && step === id ? (
+                    <div className="detail">
+                      <Detail id={id} data={s.data} />
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        </>
       ) : null}
     </section>
   );

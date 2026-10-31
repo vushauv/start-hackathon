@@ -24,6 +24,10 @@ CACHE_VER = "v1"
 EVIDENCE_CHARS = 14000
 TOPK = {"single-session-user": 3, "single-session-assistant": 3, "knowledge-update": 4,
         "temporal-reasoning": 4, "multi-session": 6}
+# The threshold is intentionally precision-first.  For questions that inherently
+# combine sessions, retain a small ranked floor when the cutoff would leave too few
+# dated facts to answer.  It affects only questions below that floor.
+MIN_EVIDENCE = {"knowledge-update": 2, "temporal-reasoning": 3, "multi-session": 4}
 RERANKERS = {"base": "BAAI/bge-reranker-base", "v2-m3": "BAAI/bge-reranker-v2-m3"}
 # Defaults chosen from eval_retriever.py on all 526 dev questions (see RESULTS.md).
 DEFAULT_CONFIG = {"reranker": "base", "rerank_text": "best2", "fusion": "fused"}
@@ -352,6 +356,10 @@ def select_evidence(ordered, rr_scores_by_sid, qtype, threshold=None):
     if threshold is None or rr_scores_by_sid is None:
         return ordered[:topk_for(qtype)]
     keep = [c for c in ordered if rr_scores_by_sid[c["sid"]] >= threshold]
+    minimum = MIN_EVIDENCE.get(qtype, 1)
+    if len(keep) < minimum:
+        keep.extend(c for c in ordered if c not in keep)
+        return keep[:minimum]
     return keep or ordered[:1]
 
 

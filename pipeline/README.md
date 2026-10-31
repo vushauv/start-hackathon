@@ -114,12 +114,12 @@ uv run pipeline predict --split test --provider openai
 |---|---|---|---|
 | a final answer with `[E#]` | false | answer with labels stripped (as the kit's `predictions.py`) | the cited passages' session ids, in order, no repeats, only ids of this history |
 | a final answer citing nothing | false | same | the first `--fallback-citations` (1) passages sent |
-| `INSUFFICIENT_EVIDENCE` | true | `""` | what it cited, else the first `--abstain-citations` (1) passages sent |
-| nothing (timeout / closed / refused after `--attempts` tries) | true (`--empty-on-no-answer` for `""` instead) | `""` | first passage sent |
+| `INSUFFICIENT_EVIDENCE` | true | `""` | `[]` |
+| nothing (timeout / closed / refused after `--attempts` tries) | true (`--empty-on-no-answer` for `""` instead) | `""` | `[]` |
 | question missing from results | true | `""` | `[]` |
 
-Why citations on abstention: evidence F1 is scored on every answerable question, including those we abstained
-on, and on unanswerable ones citations are ignored, so the top passage can only help. Nothing else is touched:
+Answered rows submit the first session selected by the LLM as directly useful; if it selected none, they fall
+back to the top retrieved passage. Abstentions always submit an empty citation array. Nothing else is touched:
 no hand edits, and the answer text is Reactor's.
 
 ## FastAPI service (Reactor)
