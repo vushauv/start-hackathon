@@ -44,5 +44,55 @@ services:
         read_only: true
         bind: { create_host_path: false }
 
+  memory-api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: pipeline/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PIPELINE_API_PORT:-8000}:8000"
+    # Point REACTOR_ENV_FILE at the handout credentials, for example:
+    # export REACTOR_ENV_FILE=../.env
+    env_file:
+      - ${REACTOR_ENV_FILE:-.env}
+    environment:
+      REACTOR_TIMEOUT: ${REACTOR_TIMEOUT:-300}
+      REACTOR_MAX_CHARS: ${REACTOR_MAX_CHARS:-16000}
+    command:
+      - --split
+      - ${PIPELINE_SPLIT:-dev}
+      - --data
+      - /data
+      - --evidence
+      - /evidence/evidence.jsonl
+      - --state
+      - /state/conversations.jsonl
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    volumes:
+      # Dataset and evidence are immutable inputs. Generate evidence before starting the API.
+      - type: bind
+        source: ${PIPELINE_DATA_DIR:-./dev}
+        target: /data
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${PIPELINE_EVIDENCE_FILE:-./pipeline/runs/dev/evidence.jsonl}
+        target: /evidence/evidence.jsonl
+        read_only: true
+        bind: { create_host_path: false }
+      # The only writable application data: resumable conversation handles and answer records.
+      - pipeline_service_state:/state
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
 volumes:
   postgres_data:
+  pipeline_service_state:

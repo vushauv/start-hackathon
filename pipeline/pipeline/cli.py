@@ -140,6 +140,18 @@ def cmd_predict(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(a: argparse.Namespace) -> int:
+    """Serve prebuilt evidence through the stateful Reactor provider."""
+    from .server import serve
+
+    d = split_dir(a.split, a.data)
+    p = _paths(a)
+    state = Path(a.state) if a.state else RUNS / a.split / "reactor-service" / "conversations.jsonl"
+    serve(data_dir=d, evidence_path=p["evidence"], host=a.host, port=a.port, state_path=state,
+          max_chars=a.max_chars, attempts=a.attempts, timeout=a.timeout)
+    return 0
+
+
 def cmd_score(a: argparse.Namespace) -> int:
     from .scoring import format_table, score
 
@@ -237,6 +249,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("run", help="retrieve (if needed) + answer + predict + score")
     common(sp); retrieve_args(sp); answer_args(sp); predict_args(sp)
     sp.set_defaults(fn=cmd_run)
+    sp = sub.add_parser("serve", help="serve prebuilt evidence through Reactor via FastAPI")
+    common(sp, selection=False)
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8000)
+    sp.add_argument("--max-chars", type=int, default=16000)
+    sp.add_argument("--attempts", type=int, default=3)
+    sp.add_argument("--timeout", type=float)
+    sp.add_argument("--state", help="append-only JSONL state for resumable conversations")
+    sp.set_defaults(fn=cmd_serve)
     sp = sub.add_parser("chat", help="interactive REPL: type a question, see every retrieval step + Reactor's reasoning")
     sp.add_argument("--split", default="dev", help="dev | test ... (default dev)")
     sp.add_argument("--data", help="directory with the split's files (default: $PIPELINE_DATA_ROOT/<split>)")
