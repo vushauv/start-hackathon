@@ -9,6 +9,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# `pipeline ui`: the web runner (any box).
+ui = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
 # Only needed for `pipeline retrieve` (GPU box). `pipeline answer/predict/score` work without it.
 retrieval = [
     "torch",
@@ -28,6 +33,8 @@ reactor-service = { path = "../reactor_service", editable = true }
 dev = [
     "pytest>=8.0",
     "websockets>=14",
+    "fastapi>=0.110",
+    "httpx>=0.27",
 ]
 
 [build-system]
@@ -36,7 +43,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pipeline"]
+include = ["pipeline/ui/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning:fastapi.testclient"]

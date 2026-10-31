@@ -20,7 +20,8 @@ without touching the others (a Postgres-backed retriever, another prompt, anothe
 | `postprocess.py` | Reactor answer -> `{abstain, answer, citations}` under a `Policy` (citation fallbacks, what to do with no answer) | abstention rules, citation rules |
 | `runner.py` | the loop; appends `results.jsonl` per question, skips what is done; `write_predictions()` | |
 | `scoring.py` + `vendor/score.py` | the organizers' `score.py`, verbatim | they publish a new one |
-| `cli.py` | `pipeline retrieve / answer / predict / score / run` | |
+| `cli.py` | `pipeline retrieve / answer / predict / score / run / ui` | |
+| `server.py` + `ui/index.html` | the web runner (`pipeline ui`): browse questions, see evidence and the exact message, ask Reactor one question at a time, build and score predictions | |
 | `models.py` | the records passed between stages (`Retrieved`, `QuestionResult`, `Prediction`) | |
 
 Retrieval is the only stage that needs a GPU and torch. It runs once per split and writes a file; everything
@@ -104,6 +105,33 @@ Why citations on abstention: evidence F1 is scored on every answerable question,
 on, and on unanswerable ones citations are ignored, so the top passage can only help. Nothing else is touched:
 no hand edits, and the answer text is Reactor's.
 
+## Web runner (`pipeline ui`)
+
+A second frontend, next to the dataset explorer in `frontend/`: it runs the pipeline for one question at a
+time from the browser. No node build; it is one HTML page served by a small FastAPI app that calls the same
+stages as the CLI.
+
+```sh
+uv sync --extra ui
+uv run pipeline ui --split test                 # http://127.0.0.1:8000  (Reactor .env needed to ask)
+PIPELINE_UI_DRY_RUN=1 uv run pipeline ui        # no Reactor: fake answers, to look around
+```
+
+- Left: the split's questions with gold type, abstain flag and the status from `results.jsonl` (✓ / ✗ / ? once
+  asked, where ? means no string match and the judge would decide). Filter by text, type or status.
+- Right: the passages that will be sent (gold sessions in green), the notes block and the exact message with
+  its size, then **Ask Reactor**. The result shows the answer, citations against gold, latency, interim
+  replies and the full reply, and is appended to the same `results.jsonl` as `pipeline answer`, so the two
+  can be mixed and a rerun of `answer` skips what was asked here.
+- One Reactor history per dataset history is kept across clicks; moving to another dataset history starts a
+  fresh one. Only one question is in flight at a time (a second click gets a 409).
+- **Build predictions + score** writes `predictions.jsonl` and, on dev, shows the organizers' table.
+- **Custom question**: type a question for a history. It needs the GPU retriever on the same box
+  (`--extra retrieval`); elsewhere the button explains that. Custom answers are never saved.
+
+API (for scripts): `GET /api/splits`, `GET /api/questions?split=`, `GET /api/question?split=&question_id=`,
+`POST /api/ask`, `POST /api/ask-custom`, `POST /api/predict`.
+
 ## Scoring on dev
 
 `pipeline score --split dev` prints the organizers' table (correct / unjudged / abstention recall / false
@@ -128,6 +156,6 @@ default `base|best2|fused` config, so most of the remaining error is in answerin
 
 ## Tests
 
-`uv run pytest` runs offline: unit tests of prompting and post-processing, and an end-to-end test of the loop
+`uv run pytest` runs offline: unit tests of prompting and post-processing, an end-to-end test of the loop
 against a fake Reactor (HTTP history endpoint + WebSocket chat) covering answers, abstention, uncited answers,
-timeouts, resume and scoring.
+timeouts, resume and scoring, and the web runner's API in dry-run mode.

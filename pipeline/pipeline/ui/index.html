@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline runner</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e4e4e4; --accent:#2b6cb0; --ok:#2f855a; --warn:#b7791f; --bad:#c53030; --panel:#f7f7f8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141518; --fg:#e8e8e8; --muted:#9a9a9a; --line:#2c2e33; --accent:#7ab0ff; --ok:#68d391; --warn:#f6c66a; --bad:#fc8181; --panel:#1d1f24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.45 system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  .app { display:grid; grid-template-columns: 380px 1fr; height:100vh; }
+  aside { border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  main { overflow:auto; padding:16px 24px; }
+  h1 { font-size:16px; margin:0; padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; }
+  h2 { font-size:14px; margin:18px 0 6px; }
+  .bar { padding:8px 16px; border-bottom:1px solid var(--line); display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .list { overflow:auto; flex:1; }
+  .q { padding:8px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .q:hover { background:var(--panel); } .q.sel { background:var(--panel); border-left:3px solid var(--accent); }
+  .q .t { font-size:12px; color:var(--muted); display:flex; gap:8px; }
+  .muted { color:var(--muted); } .mono { font-family: ui-monospace, monospace; font-size:12px; }
+  pre { background:var(--panel); padding:10px; border-radius:6px; white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto; font-size:12px; }
+  button { font:inherit; padding:6px 12px; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:6px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); } button:disabled { opacity:.5; cursor:default; }
+  input, select, textarea { font:inherit; padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+  textarea { width:100%; min-height:60px; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; background:var(--panel); border:1px solid var(--line); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  .ev { border:1px solid var(--line); border-radius:6px; margin:8px 0; }
+  .ev .h { padding:6px 10px; background:var(--panel); display:flex; gap:10px; align-items:center; cursor:pointer; }
+  .ev pre { margin:0; border-radius:0 0 6px 6px; max-height:300px; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  table { border-collapse:collapse; font-size:12px; } td, th { border:1px solid var(--line); padding:3px 8px; text-align:right; } th:first-child, td:first-child { text-align:left; }
+  .cite { font-family: ui-monospace, monospace; font-size:12px; }
+  .cite.hit { color:var(--ok); } .cite.miss { color:var(--bad); }
+  details summary { cursor:pointer; }
+  @media (max-width: 900px) { .app { grid-template-columns:1fr; height:auto; } aside { max-height:45vh; } .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Pipeline runner <span id="mode" class="tag"></span></h1>
+    <div class="bar">
+      <select id="split"></select>
+      <input id="filter" placeholder="filter: text, type, status…" style="flex:1; min-width:120px">
+      <span id="count" class="muted"></span>
+    </div>
+    <div class="bar">
+      <button id="predict">Build predictions + score</button>
+      <span id="predictInfo" class="muted"></span>
+    </div>
+    <div class="list" id="list"></div>
+  </aside>
+  <main id="main"><p class="muted">Pick a question on the left, or ask a custom one below.</p></main>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api = async (path, body) => {
+  const r = await fetch(path, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)} : undefined);
+  const j = await r.json().catch(() => ({detail: r.statusText}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+};
+let state = { split: null, questions: [], hasEvidence: false, hasGold: false, selected: null, custom: false };
+
+async function init() {
+  const s = await api('/api/splits');
+  $('#mode').textContent = s.dry_run ? 'dry run (no Reactor)' : 'Reactor';
+  $('#mode').className = 'tag ' + (s.dry_run ? 'warn' : 'ok');
+  const sel = $('#split');
+  sel.innerHTML = s.splits.map(x => `<option>${esc(x)}</option>`).join('') || '<option>(no data)</option>';
+  const want = new URLSearchParams(location.search).get('split');
+  if (want && s.splits.includes(want)) sel.value = want;
+  sel.onchange = loadQuestions; $('#filter').oninput = renderList; $('#predict').onclick = predict;
+  if (s.splits.length) await loadQuestions();
+}
+
+async function loadQuestions() {
+  state.split = $('#split').value;
+  try {
+    const d = await api(`/api/questions?split=${encodeURIComponent(state.split)}`);
+    Object.assign(state, { questions: d.questions, hasEvidence: d.has_evidence, hasGold: d.has_gold });
+  } catch (e) { $('#list').innerHTML = `<p class="bad" style="padding:16px">${esc(e.message)}</p>`; return; }
+  renderList();
+  if (!state.hasEvidence) $('#main').innerHTML = `<p class="bad">No evidence file for this split yet. Run <code>pipeline retrieve --split ${esc(state.split)}</code> on the GPU box, then reload.</p>` + customForm();
+  else if (!state.selected) $('#main').innerHTML = '<p class="muted">Pick a question on the left, or ask a custom one below.</p>' + customForm();
+  bindCustom();
+}
+
+function statusTag(q) {
+  if (!q.result) return '<span class="tag">not asked</span>';
+  const st = q.result.status;
+  let cls = st === 'answered' ? 'ok' : st === 'abstained' ? 'warn' : 'bad';
+  let judged = '';
+  if (q.gold && st !== 'no-answer') {
+    const right = q.gold.abstain ? st === 'abstained' : (st === 'answered' && matches(q.result.answer_raw, q.gold.answer));
+    judged = right ? ' ✓' : q.gold.abstain || st === 'abstained' ? ' ✗' : ' ?';
+  }
+  return `<span class="tag ${cls}">${esc(st)}${judged}</span>`;
+}
+const norm = s => String(s || '').toLowerCase().replace(/\[\s*e\d+(\s*[,;]\s*e\d+)*\s*\]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const matches = (pred, gold) => gold && (' ' + norm(pred) + ' ').includes(' ' + norm(gold) + ' ');
+
+function renderList() {
+  const f = $('#filter').value.toLowerCase();
+  const rows = state.questions.filter(q => !f || [q.question, q.question_id, q.history_id, q.gold?.question_type, q.result?.status, q.gold?.abstain ? 'abstain' : ''].join(' ').toLowerCase().includes(f));
+  $('#count').textContent = `${rows.length}/${state.questions.length}`;
+  $('#list').innerHTML = rows.map(q => `<div class="q ${state.selected === q.question_id ? 'sel' : ''}" data-id="${esc(q.question_id)}">
+      <div>${esc(q.question)}</div>
+      <div class="t"><span>${esc(q.gold?.question_type || '')}</span>${q.gold?.abstain ? '<span class="warn">abstain</span>' : ''}${statusTag(q)}<span>${q.result?.latency_s ? q.result.latency_s + 's' : ''}</span></div>
+    </div>`).join('');
+  document.querySelectorAll('.q').forEach(el => el.onclick = () => select(el.dataset.id));
+}
+
+async function select(id) {
+  state.selected = id; renderList();
+  $('#main').innerHTML = '<p class="muted">Loading…</p>';
+  try { renderQuestion(await api(`/api/question?split=${encodeURIComponent(state.split)}&question_id=${encodeURIComponent(id)}`)); }
+  catch (e) { $('#main').innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+}
+
+function citeList(ids, goldIds) {
+  if (!ids?.length) return '<span class="muted">none</span>';
+  return ids.map(i => `<span class="cite ${goldIds ? (goldIds.includes(i) ? 'hit' : 'miss') : ''}">${esc(i)}</span>`).join(', ');
+}
+
+function evidenceBlocks(r, goldIds, sentIds) {
+  return r.evidence.map((e, i) => `<div class="ev"><div class="h" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden">
+      <b>[E${i + 1}]</b> <span class="cite ${goldIds ? (goldIds.includes(e.id) ? 'hit' : 'miss') : ''}">${esc(e.id)}</span>
+      <span class="muted">${esc(e.date)}</span><span class="muted">${e.text.length} chars</span>
+      ${sentIds && !sentIds.includes(e.id) ? '<span class="tag bad">dropped to fit</span>' : ''}</div><pre hidden>${esc(e.text)}</pre></div>`).join('');
+}
+
+function resultBlock(res, pred, gold) {
+  if (!res) return '<p class="muted">Not asked yet.</p>';
+  const goldIds = gold?.evidence;
+  const judged = gold ? (gold.abstain ? (pred.abstain ? '<span class="ok">correct abstention</span>' : '<span class="bad">should have abstained</span>')
+      : pred.abstain ? '<span class="bad">false abstention</span>' : matches(pred.answer, gold.answer) ? '<span class="ok">matches gold</span>' : '<span class="warn">no string match (judge decides)</span>') : '';
+  return `<table><tr><th>status</th><td>${esc(res.status)} ${judged}</td></tr>
+    <tr><th>answer</th><td style="text-align:left"><b>${esc(pred.answer)}</b> ${pred.abstain ? '<span class="tag warn">abstain</span>' : ''}</td></tr>
+    <tr><th>raw</th><td style="text-align:left" class="mono">${esc(res.answer_raw)}</td></tr>
+    <tr><th>citations</th><td style="text-align:left">${citeList(pred.citations, goldIds)}</td></tr>
+    ${gold ? `<tr><th>gold</th><td style="text-align:left">${esc(gold.abstain ? 'ABSTAIN: ' + gold.answer : gold.answer)} · ${citeList(gold.evidence)}</td></tr>` : ''}
+    <tr><th>latency</th><td>${res.latency_s}s, ${res.retries} retries, ${res.attempts} attempt(s)${res.error ? ' · <span class="bad">' + esc(res.error) + '</span>' : ''}</td></tr>
+    </table>
+    ${res.other_replies?.length ? `<details><summary>${res.other_replies.length} interim repl${res.other_replies.length > 1 ? 'ies' : 'y'}</summary><pre>${esc(res.other_replies.join('\n---\n'))}</pre></details>` : ''}
+    ${res.reply ? `<details><summary>full reply</summary><pre>${esc(res.reply)}</pre></details>` : ''}`;
+}
+
+function renderQuestion(d) {
+  const q = d.question, r = d.retrieved, goldIds = d.gold?.evidence;
+  $('#main').innerHTML = `
+    <h2 style="margin-top:0">${esc(q.question)}</h2>
+    <div class="muted mono">${esc(q.question_id)} · history ${esc(q.history_id)} · asked ${esc(q.question_date)} · guessed type <b>${esc(r.guessed_type || '?')}</b>${d.gold ? ' · gold type <b>' + esc(d.gold.question_type) + '</b>' : ''}</div>
+    <p><button class="primary" id="ask">${d.result ? 'Ask again' : 'Ask Reactor'}</button> <span id="askInfo" class="muted"></span></p>
+    <div class="grid">
+      <div><h2>Result</h2><div id="result">${resultBlock(d.result, d.prediction, d.gold)}</div></div>
+      <div><h2>Evidence sent (${r.evidence.length} passages, ${d.composed.chars}/${d.composed.max_chars} chars)</h2>${evidenceBlocks(r, goldIds, d.composed.evidence_ids)}
+        <details><summary>candidates (${r.candidates.length})</summary><p>${citeList(r.candidates, goldIds)}</p></details></div>
+    </div>
+    <details><summary>Notes block</summary><pre>${esc(d.composed.notes)}</pre></details>
+    <details><summary>Exact message (${d.composed.chars} chars)</summary><pre>${esc(d.composed.message)}</pre></details>
+    ${customForm(q.history_id, q.question_date)}`;
+  bindCustom();
+  $('#ask').onclick = async () => {
+    const b = $('#ask'); b.disabled = true; $('#askInfo').textContent = 'asking Reactor… (tens of seconds)';
+    try {
+      const out = await api('/api/ask', { split: state.split, question_id: q.question_id });
+      $('#result').innerHTML = resultBlock(out.result, out.prediction, d.gold);
+      const qq = state.questions.find(x => x.question_id === q.question_id);
+      if (qq) qq.result = { status: out.result.status, answer_raw: out.result.answer_raw, cited_ids: out.result.cited_ids, latency_s: out.result.latency_s };
+      renderList(); $('#askInfo').textContent = 'saved to results.jsonl';
+    } catch (e) { $('#askInfo').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+    b.disabled = false;
+  };
+}
+
+function customForm(hid = '', date = '') {
+  return `<details id="custom" style="margin-top:24px"><summary>Ask a custom question (needs the GPU retriever on this box)</summary>
+    <p><input id="cHid" placeholder="history_id (h_…)" value="${esc(hid)}" style="width:220px"> <input id="cDate" placeholder="question date, e.g. 2023/05/30 (Tue) 08:08" value="${esc(date)}" style="width:280px"></p>
+    <textarea id="cQ" placeholder="your question about that history"></textarea>
+    <p><button id="cAsk">Retrieve + ask</button> <span id="cInfo" class="muted"></span></p><div id="cOut"></div></details>`;
+}
+function bindCustom() {
+  const b = $('#cAsk'); if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true; $('#cInfo').textContent = 'retrieving and asking…';
+    try {
+      const out = await api('/api/ask-custom', { split: state.split, history_id: $('#cHid').value.trim(), question: $('#cQ').value, question_date: $('#cDate').value.trim() });
+      $('#cOut').innerHTML = resultBlock(out.result, out.prediction, null) + `<h2>Evidence</h2>` + evidenceBlocks(out.retrieved, null, null)
+        + `<details><summary>Exact message (${out.composed.chars} chars)</summary><pre>${esc(out.composed.message)}</pre></details>`;
+      $('#cInfo').textContent = 'not saved (custom questions never go to results.jsonl)';
+    } catch (e) { $('#cInfo').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+    b.disabled = false;
+  };
+}
+
+async function predict() {
+  const b = $('#predict'); b.disabled = true; $('#predictInfo').textContent = 'writing…';
+  try {
+    const out = await api('/api/predict', { split: state.split });
+    let html = `${out.n} predictions (${out.abstained} abstained) → <span class="mono">${esc(out.predictions)}</span>`;
+    if (out.score) {
+      const cols = ['n', 'correct', 'unjudged', 'abstention_recall', 'false_abstention', 'evidence_f1'];
+      html += `<table style="margin-top:6px"><tr><th>type</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr>` +
+        Object.entries(out.score).map(([k, v]) => `<tr><td>${esc(k)}</td>${cols.map(c => `<td>${v[c] == null ? '-' : typeof v[c] === 'number' && !Number.isInteger(v[c]) ? v[c].toFixed(3) : v[c]}</td>`).join('')}</tr>`).join('') + '</table>';
+    }
+    $('#predictInfo').innerHTML = html;
+  } catch (e) { $('#predictInfo').innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  b.disabled = false;
+}
+init();
+</script>
+</body>
+</html>

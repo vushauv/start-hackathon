@@ -5,6 +5,7 @@
     pipeline predict  --split test                 # results.jsonl -> runs/test/predictions.jsonl
     pipeline score    --split dev                  # dev only: the organizers' metrics
     pipeline run      --split dev --limit 20       # all of the above that apply
+    pipeline ui       --split test                 # web runner at http://127.0.0.1:8000 (needs the `ui` extra)
 
 Files live in ``pipeline/runs/<split>/`` unless overridden with --evidence/--results/--predictions.
 """
@@ -119,6 +120,16 @@ def cmd_run(a: argparse.Namespace) -> int:
     return cmd_score(a) if gold.exists() else 0
 
 
+def cmd_ui(a: argparse.Namespace) -> int:
+    try:
+        from .server import serve
+    except ImportError as e:
+        _log(f"the UI needs the `ui` extra: uv sync --extra ui ({e})")
+        return 2
+    serve(a.split, host=a.host, port=a.port, runs=RUNS, data=a.data, dry_run=a.dry_run, attempts=a.attempts)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="pipeline", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -166,6 +177,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("run", help="retrieve (if needed) + answer + predict + score")
     common(sp); retrieve_args(sp); answer_args(sp); predict_args(sp)
     sp.set_defaults(fn=cmd_run)
+    sp = sub.add_parser("ui", help="web runner: ask questions one by one from the browser")
+    sp.add_argument("--split", help="split selected first in the browser")
+    sp.add_argument("--data", help="directory with the split's files")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8000)
+    sp.add_argument("--attempts", type=int, default=3)
+    sp.add_argument("--dry-run", action="store_true", help="no Reactor: fake answers, to try the UI")
+    sp.set_defaults(fn=cmd_ui)
     return ap
 
 
