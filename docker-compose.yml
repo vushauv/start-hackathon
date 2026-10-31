@@ -22,8 +22,12 @@ services:
       - "127.0.0.1:5173:5173" # dev server: local machine only
     environment:
       DATA_DIR: /data
+      # the reading room proxies /api to `pipeline ui` running on the host (see pipeline/README.md)
+      API_URL: ${API_URL:-http://host.docker.internal:8001}
       # bind mounts don't reliably emit fs events (Docker Desktop / VMs)
       USE_POLLING: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./frontend:/app
       - /app/node_modules # keep the image's installed deps

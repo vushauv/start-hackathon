@@ -19,6 +19,13 @@ retrieval = [
     "scipy",
 ]
 
+# `pipeline ui`: the web app (FastAPI backend for the frontend/ reading room)
+ui = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "psycopg[binary]>=3.2",  # sessions from PostgreSQL (db/); the UI falls back to files without it
+]
+
 [project.scripts]
 pipeline = "pipeline.cli:main"
 
@@ -29,6 +36,7 @@ reactor-service = { path = "../reactor_service", editable = true }
 dev = [
     "pytest>=8.0",
     "websockets>=14",
+    "httpx>=0.27",
 ]
 
 [build-system]

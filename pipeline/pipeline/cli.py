@@ -142,6 +142,17 @@ def cmd_run(a: argparse.Namespace) -> int:
     return cmd_score(a) if gold.exists() else 0
 
 
+def cmd_ui(a: argparse.Namespace) -> int:
+    try:
+        from .server import serve
+    except ImportError as e:
+        _log(f"the UI needs the `ui` extra: uv sync --extra ui ({e})")
+        return 2
+    serve(a.split, host=a.host, port=a.port, runs=RUNS, data=a.data, dry_run=a.dry_run, attempts=a.attempts or 3,
+          provider=a.provider, model=a.model, device=a.device)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="pipeline", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -212,6 +223,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dry-run", action="store_true", help="show everything but do not call Reactor")
     sp.add_argument("--show-message", action="store_true", help="also print the full message sent to Reactor")
     sp.set_defaults(fn=lambda a: __import__("pipeline.chat", fromlist=["cmd_chat"]).cmd_chat(a))
+    sp = sub.add_parser("ui", help="web app backend: ask questions, get answers with located quotes (needs the ui extra)")
+    sp.add_argument("--split", default="test", help="split shown first (default test)")
+    sp.add_argument("--data", help="directory with the split's files (default: $PIPELINE_DATA_ROOT/<split>)")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8001)
+    provider_args(sp)
+    sp.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto", help="retriever device (default auto)")
+    sp.add_argument("--attempts", type=int, help="tries per question (default 3 reactor, 6 groq)")
+    sp.add_argument("--dry-run", action="store_true", help="no Reactor/Groq: fake answers citing the first passage")
+    sp.set_defaults(fn=cmd_ui)
     return ap
 
 

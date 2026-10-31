@@ -51,11 +51,12 @@ def data_root() -> Path:
 def split_dir(split: str, root: str | Path | None = None) -> Path:
     """The directory holding a split's files. Falls back to the repo root (where the README puts dev)."""
     base = Path(root).expanduser() if root else data_root()
-    for cand in (base / split, base, REPO):
+    cands = [base / split, base] + ([REPO] if split == "dev" else [])  # the README puts dev's files in the repo root
+    for cand in cands:
         if all((cand / f).exists() for f in SPLIT_FILES):
             return cand
     raise FileNotFoundError(
-        f"split {split!r}: no questions.jsonl + histories.jsonl under {base / split}, {base} or {REPO}; "
+        f"split {split!r}: no questions.jsonl + histories.jsonl under {base / split} or {base}; "
         "pass --data DIR or set PIPELINE_DATA_ROOT (see README 'Data setup')"
     )
 
