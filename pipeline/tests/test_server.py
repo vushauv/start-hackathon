@@ -22,7 +22,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("PIPELINE_DATA_ROOT", str(tmp_path / "data"))
     runs = tmp_path / "runs"
     write_jsonl(runs / "mini" / "evidence.jsonl", EVIDENCE)
-    return TestClient(create_app(State(runs, dry_run=True)))
+    return TestClient(create_app(State(runs, dry_run=True), allowed_hosts=["testserver", "127.0.0.1", "localhost"]))
 
 
 def test_splits_and_questions(client):
@@ -61,3 +61,9 @@ def test_errors(client):
     r = client.post("/api/ask-custom", json={"split": "mini", "history_id": "h1", "question": "x"})
     assert r.status_code == 503 and "retrieval" in r.json()["detail"]
     assert client.get("/").status_code == 200 and "Pipeline runner" in client.get("/").text
+
+
+def test_split_name_validation_and_host_guard(client):
+    assert client.get("/api/questions", params={"split": "../etc"}).status_code == 400
+    assert client.post("/api/predict", json={"split": "a/b"}).status_code == 400
+    assert client.get("/api/splits", headers={"Host": "evil.example"}).status_code == 400

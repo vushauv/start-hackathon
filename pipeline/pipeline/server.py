@@ -13,6 +13,7 @@ loads it on first use and reports when it is not available.
 from __future__ import annotations
 
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -31,6 +32,14 @@ from .retrieval import FileRetrieval, LocalRetrieval, Retrieval
 from .runner import answer_one, write_predictions
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
+SPLIT_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def check_split(name: str) -> str:
+    """Split names become directory names under runs/ and data/: letters, digits, '-' and '_' only."""
+    if not SPLIT_NAME.match(name):
+        raise HTTPException(400, f"invalid split name {name!r}")
+    return name
 
 
 class AskBody(BaseModel):
@@ -67,12 +76,13 @@ class State:
         self.local: dict[str, Retrieval] = {}
 
     def split(self, name: str) -> Split:
+        check_split(name)
         if name not in self.splits:
             self.splits[name] = Split(split_dir(name, self.data))
         return self.splits[name]
 
     def paths(self, name: str) -> dict[str, Path]:
-        d = self.runs / name
+        d = self.runs / check_split(name)
         return {k: d / f"{k}.jsonl" for k in ("evidence", "results", "predictions", "score_details")}
 
     def retrieval(self, name: str) -> FileRetrieval:
@@ -126,8 +136,12 @@ class State:
         return out
 
 
-def create_app(state: State) -> FastAPI:
+def create_app(state: State, allowed_hosts: list[str] | None = None) -> FastAPI:
+    from fastapi.middleware.trustedhost import TrustedHostMiddleware
+
     app = FastAPI(title="memory pipeline UI")
+    # Only answer requests addressed to the host we were started on: blocks DNS-rebinding from a web page.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts or ["127.0.0.1", "localhost"])
 
     @app.get("/")
     def index():
@@ -235,6 +249,10 @@ def serve(split: str | None, *, host: str = "127.0.0.1", port: int = 8000, runs:
     import uvicorn
 
     state = State(runs, data, dry_run=dry_run or os.environ.get("PIPELINE_UI_DRY_RUN") == "1", attempts=attempts)
-    app = create_app(state)
+    hosts = ["127.0.0.1", "localhost"] if host in ("127.0.0.1", "localhost") else [host, "127.0.0.1", "localhost"]
+    if host not in ("127.0.0.1", "localhost"):
+        print(f"WARNING: binding to {host}: anyone who can reach this port can ask Reactor with your key. "
+              "Prefer an SSH tunnel to 127.0.0.1.", flush=True)
+    app = create_app(state, allowed_hosts=hosts)
     app.state.default_split = split
     uvicorn.run(app, host=host, port=port, log_level="info")
