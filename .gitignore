@@ -14,3 +14,7 @@ dist/
 __pycache__/
 *.pyc
 .pytest_cache/
+retriever/cache/
+retriever/*.jsonl
+retriever/*.log
+__pycache__/

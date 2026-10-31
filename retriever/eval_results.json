@@ -1,0 +1,649 @@
+{
+  "meta": {
+    "n_questions": 526,
+    "n_answerable": 496,
+    "n_histories": 470,
+    "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "topk": {
+      "single-session-user": 3,
+      "single-session-assistant": 3,
+      "knowledge-update": 4,
+      "temporal-reasoning": 4,
+      "multi-session": 6
+    },
+    "n_cand": 20
+  },
+  "timing": {
+    "load_s": 0.9,
+    "index_s": 785.5,
+    "n_chunks_B": 115025,
+    "n_chunks_F": 292267,
+    "first_stage_s": 25.9,
+    "rerank_base_best1_s": 60.9,
+    "rerank_base_best1_pairs_per_s": 172.8,
+    "rerank_base_best2_s": 118.4,
+    "rerank_base_best2_pairs_per_s": 88.8,
+    "rerank_base_load_s": 4.1,
+    "rerank_v2-m3_best1_s": 204.2,
+    "rerank_v2-m3_best1_pairs_per_s": 51.5,
+    "rerank_v2-m3_best2_s": 359.9,
+    "rerank_v2-m3_best2_pairs_per_s": 29.2,
+    "rerank_v2-m3_load_s": 5.0,
+    "wall_s": 1569.3
+  },
+  "vram": {
+    "embedder_peak_alloc_mib": 1289,
+    "embedder_peak_reserved_mib": 2020,
+    "base_peak_alloc_mib": 810,
+    "base_peak_reserved_mib": 922,
+    "v2-m3_peak_alloc_mib": 1263,
+    "v2-m3_peak_reserved_mib": 1318
+  },
+  "type_guesser": {
+    "accuracy": 0.6407,
+    "per_type_recall": {
+      "single-session-user": 0.6857,
+      "single-session-assistant": 0.4821,
+      "knowledge-update": 0.2949,
+      "temporal-reasoning": 0.8421,
+      "multi-session": 0.7519
+    },
+    "confusion": {
+      "single-session-user": {
+        "single-session-user": 48,
+        "single-session-assistant": 0,
+        "knowledge-update": 3,
+        "temporal-reasoning": 5,
+        "multi-session": 14
+      },
+      "single-session-assistant": {
+        "single-session-user": 49,
+        "single-session-assistant": 54,
+        "knowledge-update": 0,
+        "temporal-reasoning": 4,
+        "multi-session": 5
+      },
+      "knowledge-update": {
+        "single-session-user": 23,
+        "single-session-assistant": 0,
+        "knowledge-update": 23,
+        "temporal-reasoning": 8,
+        "multi-session": 24
+      },
+      "temporal-reasoning": {
+        "single-session-user": 11,
+        "single-session-assistant": 0,
+        "knowledge-update": 2,
+        "temporal-reasoning": 112,
+        "multi-session": 8
+      },
+      "multi-session": {
+        "single-session-user": 16,
+        "single-session-assistant": 0,
+        "knowledge-update": 6,
+        "temporal-reasoning": 11,
+        "multi-session": 100
+      }
+    }
+  },
+  "results": {
+    "rrf": {
+      "overall": {
+        "R@3": 0.911,
+        "R@5": 0.9595,
+        "R@20": 0.9975,
+        "MRR": 0.9478,
+        "R@k": 0.9493,
+        "F1@k": 0.5578,
+        "F1@k_gold": 0.5618,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 0.9844,
+        "R@5": 0.9844,
+        "R@20": 1.0,
+        "MRR": 0.9599,
+        "R@k": 0.9844,
+        "F1@k": 0.4362,
+        "F1@k_gold": 0.4922,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 0.9821,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9757,
+        "R@k": 0.9821,
+        "F1@k": 0.4779,
+        "F1@k_gold": 0.4911,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 0.9931,
+        "R@5": 0.9931,
+        "R@20": 1.0,
+        "MRR": 0.9861,
+        "R@k": 0.9931,
+        "F1@k": 0.65,
+        "F1@k_gold": 0.662,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8333,
+        "R@5": 0.9133,
+        "R@20": 0.9902,
+        "MRR": 0.8881,
+        "R@k": 0.8883,
+        "F1@k": 0.5948,
+        "F1@k_gold": 0.599,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.8391,
+        "R@5": 0.9375,
+        "R@20": 1.0,
+        "MRR": 0.9552,
+        "R@k": 0.9382,
+        "F1@k": 0.6025,
+        "F1@k_gold": 0.5655,
+        "n": 121
+      }
+    },
+    "base|best1|rerank": {
+      "overall": {
+        "R@3": 0.912,
+        "R@5": 0.9592,
+        "R@20": 0.9975,
+        "MRR": 0.9575,
+        "R@k": 0.9477,
+        "F1@k": 0.5565,
+        "F1@k_gold": 0.5608,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9583,
+        "R@k": 1.0,
+        "F1@k": 0.444,
+        "F1@k_gold": 0.5,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 1.0,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 0.9931,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9931,
+        "R@k": 0.9931,
+        "F1@k": 0.6491,
+        "F1@k_gold": 0.6667,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8108,
+        "R@5": 0.9202,
+        "R@20": 0.9902,
+        "MRR": 0.8969,
+        "R@k": 0.8618,
+        "F1@k": 0.5831,
+        "F1@k_gold": 0.5858,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.8419,
+        "R@5": 0.9165,
+        "R@20": 1.0,
+        "MRR": 0.9601,
+        "R@k": 0.9347,
+        "F1@k": 0.5975,
+        "F1@k_gold": 0.5601,
+        "n": 121
+      }
+    },
+    "base|best1|fused": {
+      "overall": {
+        "R@3": 0.9284,
+        "R@5": 0.9709,
+        "R@20": 0.9975,
+        "MRR": 0.9597,
+        "R@k": 0.9607,
+        "F1@k": 0.5654,
+        "F1@k_gold": 0.5693,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 0.9844,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9727,
+        "R@k": 0.9844,
+        "F1@k": 0.4362,
+        "F1@k_gold": 0.4922,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9955,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9931,
+        "R@k": 1.0,
+        "F1@k": 0.6546,
+        "F1@k_gold": 0.6667,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8668,
+        "R@5": 0.9207,
+        "R@20": 0.9902,
+        "MRR": 0.8969,
+        "R@k": 0.8975,
+        "F1@k": 0.6026,
+        "F1@k_gold": 0.6059,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.8545,
+        "R@5": 0.9638,
+        "R@20": 1.0,
+        "MRR": 0.9658,
+        "R@k": 0.9548,
+        "F1@k": 0.6145,
+        "F1@k_gold": 0.578,
+        "n": 121
+      }
+    },
+    "base|best2|rerank": {
+      "overall": {
+        "R@3": 0.9281,
+        "R@5": 0.9644,
+        "R@20": 0.9975,
+        "MRR": 0.9644,
+        "R@k": 0.9501,
+        "F1@k": 0.5572,
+        "F1@k_gold": 0.5625,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9922,
+        "R@k": 1.0,
+        "F1@k": 0.444,
+        "F1@k_gold": 0.5,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 1.0,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 0.9861,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9861,
+        "R@k": 0.9861,
+        "F1@k": 0.6444,
+        "F1@k_gold": 0.662,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8462,
+        "R@5": 0.9231,
+        "R@20": 0.9902,
+        "MRR": 0.9103,
+        "R@k": 0.8717,
+        "F1@k": 0.5851,
+        "F1@k_gold": 0.5916,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.8748,
+        "R@5": 0.9347,
+        "R@20": 1.0,
+        "MRR": 0.9605,
+        "R@k": 0.9386,
+        "F1@k": 0.6011,
+        "F1@k_gold": 0.5636,
+        "n": 121
+      }
+    },
+    "base|best2|fused": {
+      "overall": {
+        "R@3": 0.9338,
+        "R@5": 0.9723,
+        "R@20": 0.9975,
+        "MRR": 0.9654,
+        "R@k": 0.9638,
+        "F1@k": 0.5673,
+        "F1@k_gold": 0.5692,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9818,
+        "R@k": 1.0,
+        "F1@k": 0.444,
+        "F1@k_gold": 0.5,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9955,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 0.9931,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9931,
+        "R@k": 0.9931,
+        "F1@k": 0.65,
+        "F1@k_gold": 0.662,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8694,
+        "R@5": 0.922,
+        "R@20": 0.9902,
+        "MRR": 0.9121,
+        "R@k": 0.8969,
+        "F1@k": 0.6031,
+        "F1@k_gold": 0.6055,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.87,
+        "R@5": 0.9683,
+        "R@20": 1.0,
+        "MRR": 0.9683,
+        "R@k": 0.9642,
+        "F1@k": 0.6203,
+        "F1@k_gold": 0.5767,
+        "n": 121
+      }
+    },
+    "v2-m3|best1|rerank": {
+      "overall": {
+        "R@3": 0.9192,
+        "R@5": 0.9612,
+        "R@20": 0.9975,
+        "MRR": 0.9632,
+        "R@k": 0.9485,
+        "F1@k": 0.5565,
+        "F1@k_gold": 0.5608,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 0.9844,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9797,
+        "R@k": 0.9844,
+        "F1@k": 0.4362,
+        "F1@k_gold": 0.4922,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 1.0,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 0.9931,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9931,
+        "R@k": 0.9931,
+        "F1@k": 0.6491,
+        "F1@k_gold": 0.6667,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8521,
+        "R@5": 0.9161,
+        "R@20": 0.9902,
+        "MRR": 0.9202,
+        "R@k": 0.8815,
+        "F1@k": 0.5934,
+        "F1@k_gold": 0.599,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.8364,
+        "R@5": 0.9291,
+        "R@20": 1.0,
+        "MRR": 0.9477,
+        "R@k": 0.9256,
+        "F1@k": 0.5909,
+        "F1@k_gold": 0.5502,
+        "n": 121
+      }
+    },
+    "v2-m3|best1|fused": {
+      "overall": {
+        "R@3": 0.9301,
+        "R@5": 0.9695,
+        "R@20": 0.9975,
+        "MRR": 0.9659,
+        "R@k": 0.9613,
+        "F1@k": 0.5656,
+        "F1@k_gold": 0.5671,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9635,
+        "R@k": 1.0,
+        "F1@k": 0.444,
+        "F1@k_gold": 0.5,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9955,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 0.9931,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9931,
+        "R@k": 1.0,
+        "F1@k": 0.6546,
+        "F1@k_gold": 0.6667,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8639,
+        "R@5": 0.9159,
+        "R@20": 0.9902,
+        "MRR": 0.9101,
+        "R@k": 0.8927,
+        "F1@k": 0.5998,
+        "F1@k_gold": 0.6018,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.8605,
+        "R@5": 0.9631,
+        "R@20": 1.0,
+        "MRR": 0.9821,
+        "R@k": 0.9541,
+        "F1@k": 0.6141,
+        "F1@k_gold": 0.569,
+        "n": 121
+      }
+    },
+    "v2-m3|best2|rerank": {
+      "overall": {
+        "R@3": 0.9359,
+        "R@5": 0.9666,
+        "R@20": 0.9975,
+        "MRR": 0.9793,
+        "R@k": 0.9582,
+        "F1@k": 0.5622,
+        "F1@k_gold": 0.5675,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 1.0,
+        "R@k": 1.0,
+        "F1@k": 0.444,
+        "F1@k_gold": 0.5,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 1.0,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 0.9931,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 1.0,
+        "R@k": 0.9931,
+        "F1@k": 0.6491,
+        "F1@k_gold": 0.6667,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8875,
+        "R@5": 0.9379,
+        "R@20": 0.9902,
+        "MRR": 0.9494,
+        "R@k": 0.9077,
+        "F1@k": 0.6077,
+        "F1@k_gold": 0.6148,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.8595,
+        "R@5": 0.9281,
+        "R@20": 1.0,
+        "MRR": 0.9683,
+        "R@k": 0.9295,
+        "F1@k": 0.5949,
+        "F1@k_gold": 0.5569,
+        "n": 121
+      }
+    },
+    "v2-m3|best2|fused": {
+      "overall": {
+        "R@3": 0.9332,
+        "R@5": 0.9717,
+        "R@20": 0.9975,
+        "MRR": 0.9688,
+        "R@k": 0.9631,
+        "F1@k": 0.5667,
+        "F1@k_gold": 0.5696,
+        "n": 496
+      },
+      "single-session-user": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9818,
+        "R@k": 1.0,
+        "F1@k": 0.444,
+        "F1@k_gold": 0.5,
+        "n": 64
+      },
+      "single-session-assistant": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 1.0,
+        "R@k": 1.0,
+        "F1@k": 0.4869,
+        "F1@k_gold": 0.5,
+        "n": 112
+      },
+      "knowledge-update": {
+        "R@3": 1.0,
+        "R@5": 1.0,
+        "R@20": 1.0,
+        "MRR": 0.9931,
+        "R@k": 1.0,
+        "F1@k": 0.6546,
+        "F1@k_gold": 0.6667,
+        "n": 72
+      },
+      "temporal-reasoning": {
+        "R@3": 0.8744,
+        "R@5": 0.9303,
+        "R@20": 0.9902,
+        "MRR": 0.9233,
+        "R@k": 0.8959,
+        "F1@k": 0.601,
+        "F1@k_gold": 0.6064,
+        "n": 127
+      },
+      "multi-session": {
+        "R@3": 0.858,
+        "R@5": 0.9573,
+        "R@20": 1.0,
+        "MRR": 0.9663,
+        "R@k": 0.958,
+        "F1@k": 0.6172,
+        "F1@k_gold": 0.5746,
+        "n": 121
+      }
+    }
+  }
+}
