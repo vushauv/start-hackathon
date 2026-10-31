@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useRecords } from '../lib/useRecords.js'
+import type { QuestionSelection } from '../types'
+import { useRecords } from '../lib/useRecords'
 
 const PAGE = 50
 const TYPES = [
@@ -10,7 +11,12 @@ const TYPES = [
   'single-session-user',
 ]
 
-export default function QuestionList({ selectedId, onSelect }) {
+interface QuestionListProps {
+  selectedId?: string
+  onSelect: (selection: QuestionSelection) => void
+}
+
+export default function QuestionList({ selectedId, onSelect }: QuestionListProps) {
   const [page, setPage] = useState(0)
   const [type, setType] = useState('')
   const [abstain, setAbstain] = useState(false)
@@ -24,7 +30,7 @@ export default function QuestionList({ selectedId, onSelect }) {
   const items = useMemo(() => {
     const n = Math.min(q.rows.length, g.rows.length)
     const needle = search.toLowerCase()
-    const out = []
+    const out: QuestionSelection[] = []
     for (let i = 0; i < n; i++) {
       const gold = g.rows[i]
       const question = q.rows[i]
@@ -42,7 +48,7 @@ export default function QuestionList({ selectedId, onSelect }) {
   const visible = items.slice(cur * PAGE, (cur + 1) * PAGE)
   const loading = q.loading || g.loading
   const error = q.error || g.error
-  const reset = (fn) => (v) => {
+  const reset = <T,>(fn: (value: T) => void) => (v: T) => {
     fn(v)
     setPage(0)
   }

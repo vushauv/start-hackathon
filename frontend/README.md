@@ -1,6 +1,6 @@
 # Frontend
 
-React + Vite explorer for the JSON-L dataset.
+React + TypeScript + Vite explorer for the JSON-L dataset.
 
 ## Docker (hot reload)
 
@@ -18,17 +18,19 @@ read-only at `/data`, and the port is published on `127.0.0.1` only (it's a dev 
 ## Local
 
 ```
-npm install
+npm ci
+npm run typecheck    # check application and Vite configuration types
+npm run build        # type-check and build for production
 npm run dev          # http://localhost:5173
 DATA_DIR=/path/to/data npm run dev   # if the .jsonl files aren't in the repo root
 ```
 
 ## Lazy loading
 
-The `.jsonl` files are never downloaded whole. A small Vite plugin (`vite.config.js`)
+The `.jsonl` files are never downloaded whole. A small Vite plugin (`vite.config.ts`)
 serves them under `/data/` with HTTP Range support, plus a `.index` endpoint that
 returns each line's byte offset/length and id (one streaming scan, ~0.5 s for the 249 MB
-histories file, cached). The browser (`src/lib/jsonl.js`) then:
+histories file, cached). The browser (`src/lib/jsonl.ts`) then:
 
 - loads `questions`/`gold` in 100-line chunks, only as far as the current page needs
   (filters and search load the rest on demand);

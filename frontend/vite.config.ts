@@ -2,25 +2,28 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
+import type { Connect, Plugin } from 'vite'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { JsonlIndex } from './src/types.ts'
 import react from '@vitejs/plugin-react'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(here, '..'))
 const NAMES = new Set(['histories', 'questions', 'gold'])
 
-// name -> Promise<{ size, offsets, lengths, ids }>
-const indexCache = new Map()
+const indexCache = new Map<string, Promise<JsonlIndex>>()
 
 // Scans a JSONL file once and records the byte offset/length of every line,
 // plus its leading id, so the browser can fetch single records with Range requests.
-function buildIndex(file) {
+function buildIndex(file: string): Promise<JsonlIndex> {
   return new Promise((resolve, reject) => {
-    const offsets = []
-    const lengths = []
+    const offsets: number[] = []
+    const lengths: number[] = []
     let pos = 0
     let lineStart = 0
     fs.createReadStream(file)
-      .on('data', (buf) => {
+      .on('data', (chunk: Buffer | string) => {
+        const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
         let i = buf.indexOf(10)
         let from = 0
         while (i !== -1) {
@@ -54,7 +57,7 @@ function buildIndex(file) {
   })
 }
 
-function serveData(req, res, next) {
+function serveData(req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) {
   const m = /^\/data\/([a-z]+)\.jsonl(\.index)?(?:\?.*)?$/.exec(req.url || '')
   if (!m || !NAMES.has(m[1])) return next()
   const file = path.join(DATA_DIR, `${m[1]}.jsonl`)
@@ -63,8 +66,12 @@ function serveData(req, res, next) {
     return res.end(`${m[1]}.jsonl not found in ${DATA_DIR}`)
   }
   if (m[2]) {
-    if (!indexCache.has(m[1])) indexCache.set(m[1], buildIndex(file))
-    return indexCache.get(m[1]).then(
+    let pending = indexCache.get(m[1])
+    if (!pending) {
+      pending = buildIndex(file)
+      indexCache.set(m[1], pending)
+    }
+    return pending.then(
       (idx) => {
         res.setHeader('Content-Type', 'application/json')
         res.end(JSON.stringify(idx))
@@ -80,7 +87,7 @@ function serveData(req, res, next) {
   const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '')
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
   res.setHeader('Accept-Ranges', 'bytes')
-  let opts
+  let opts: { start: number; end: number } | undefined
   if (range) {
     const start = Number(range[1])
     const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
@@ -94,7 +101,7 @@ function serveData(req, res, next) {
   fs.createReadStream(file, opts).pipe(res)
 }
 
-const dataPlugin = {
+const dataPlugin: Plugin = {
   name: 'jsonl-data',
   configureServer(s) {
     s.middlewares.use(serveData)
