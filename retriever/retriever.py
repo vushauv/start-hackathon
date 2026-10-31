@@ -299,18 +299,29 @@ def _ranks(scores):
     return r
 
 
-def first_stage(idx, qvec, qtext, n_cand=N_CAND):
-    """Return list of candidates [{si, sid, rrf, chunks:[F idx ordered best first]}]."""
+def first_stage(idx, qvec, qtext, n_cand=N_CAND, trace=None):
+    """Return list of candidates [{si, sid, rrf, chunks:[F idx ordered best first]}].
+
+    If ``trace`` is a dict it is filled (for inspection only; results are unchanged) with the
+    per-channel session scores: trace["dense_B"|"dense_F"|"bm25"] = np.array of n session scores
+    (max over chunks, -inf if none) and trace["rrf"] = fused RRF scores."""
     n = len(idx.sids)
     b = idx.B_emb @ qvec if len(idx.B_emb) else np.zeros(0, np.float32)
     f = idx.F_emb @ qvec
     bm = idx.bm25.scores(qtext)
     rrf = np.zeros(n, dtype=np.float64)
-    for sc, sess in ((b, idx.B_sess), (f, idx.F_sess), (bm, idx.F_sess)):
+    for name, sc, sess in (("dense_B", b, idx.B_sess), ("dense_F", f, idx.F_sess), ("bm25", bm, idx.F_sess)):
         if len(sc) == 0:
+            if trace is not None:
+                trace[name] = np.full(n, -np.inf, dtype=np.float32)
             continue
-        r = _ranks(_sess_max(sc, sess, n))
+        sm = _sess_max(sc, sess, n)
+        if trace is not None:
+            trace[name] = sm
+        r = _ranks(sm)
         rrf += 1.0 / (RRF_K + r + 1)
+    if trace is not None:
+        trace["rrf"] = rrf
     cand = np.argsort(-rrf, kind="stable")[:n_cand]
     # chunk-level ordering inside a session: RRF of dense-F rank and BM25 rank
     crrf = 1.0 / (RRF_K + _ranks(f) + 1) + 1.0 / (RRF_K + _ranks(bm) + 1)

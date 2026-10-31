@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "reactor-service",
     "pydantic>=2.7",
+    "rich>=13",
 ]
 
 [project.optional-dependencies]

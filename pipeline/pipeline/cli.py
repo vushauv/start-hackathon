@@ -5,6 +5,7 @@
     pipeline predict  --split test                 # results.jsonl -> runs/test/predictions.jsonl
     pipeline score    --split dev                  # dev only: the organizers' metrics
     pipeline run      --split dev --limit 20       # all of the above that apply
+    pipeline run      --split dev --provider groq  # same, answered by a Groq LLM -> runs/dev/groq/<model>/
 
 Files live in ``pipeline/runs/<split>/`` unless overridden with --evidence/--results/--predictions.
 """
@@ -15,7 +16,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .answering import DryRunAnswerer, ReactorAnswerer
+from .answering import GROQ_DEFAULT_MAX_CHARS, GROQ_DEFAULT_MODEL, make_answerer
 from .data import Split, split_dir
 from .postprocess import Policy
 from .prompting import compose
@@ -25,10 +26,29 @@ from .runner import run, write_predictions
 RUNS = Path(__file__).resolve().parent.parent / "runs"
 
 
-def _paths(a: argparse.Namespace) -> dict[str, Path]:
+def _provider_defaults(a: argparse.Namespace) -> None:
+    """Fill --model / --max-chars from the provider when not given."""
+    groq = getattr(a, "provider", "reactor") == "groq"
+    if hasattr(a, "model") and not a.model and groq:
+        a.model = GROQ_DEFAULT_MODEL
+    if hasattr(a, "max_chars") and a.max_chars is None:
+        a.max_chars = GROQ_DEFAULT_MAX_CHARS if groq else 16000
+
+
+def _out_dir(a: argparse.Namespace) -> Path:
+    """runs/<split>/ for Reactor; runs/<split>/groq/<model>/ for Groq, so the two never mix."""
     d = RUNS / a.split
+    if getattr(a, "provider", "reactor") == "groq":
+        d = d / "groq" / (getattr(a, "model", None) or GROQ_DEFAULT_MODEL).replace("/", "_")
+    return d
+
+
+def _paths(a: argparse.Namespace) -> dict[str, Path]:
+    _provider_defaults(a)
+    d = _out_dir(a)
+    ev = RUNS / a.split / "evidence.jsonl"  # evidence is shared by all providers
     return {
-        "evidence": Path(a.evidence) if getattr(a, "evidence", None) else d / "evidence.jsonl",
+        "evidence": Path(a.evidence) if getattr(a, "evidence", None) else ev,
         "results": Path(a.results) if getattr(a, "results", None) else d / "results.jsonl",
         "predictions": Path(a.predictions) if getattr(a, "predictions", None) else d / "predictions.jsonl",
         "details": d / "score_details.jsonl",
@@ -68,6 +88,7 @@ def cmd_answer(a: argparse.Namespace) -> int:
     split = Split(split_dir(a.split, a.data))
     p = _paths(a)
     qs = _questions(split, a)
+    p["results"].parent.mkdir(parents=True, exist_ok=True)
     retrieval = FileRetrieval(p["evidence"])
     if a.dry_run:
         rows = retrieval.retrieve(qs)
@@ -77,7 +98,9 @@ def cmd_answer(a: argparse.Namespace) -> int:
         if a.show:
             print(compose(rows[0], a.max_chars).message)
         return 0
-    answerer = ReactorAnswerer(attempts=a.attempts, timeout=a.timeout, log=_log)
+    answerer = make_answerer(a.provider, model=a.model, attempts=a.attempts, timeout=a.timeout, log=_log)
+    _log(f"provider {a.provider}" + (f", model {a.model}" if a.provider == "groq" else "")
+         + f", max-chars {a.max_chars} -> {p['results']}")
     run(qs, retrieval, answerer, p["results"], max_chars=a.max_chars, log=_log)
     return 0
 
@@ -123,12 +146,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="pipeline", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    def provider_args(sp):
+        sp.add_argument("--provider", choices=["reactor", "groq"], default="reactor",
+                        help="who answers (default reactor). groq: files go to runs/<split>/groq/<model>/")
+        sp.add_argument("--model", help=f"groq model (default {GROQ_DEFAULT_MODEL})")
+
     def common(sp, *, selection=True):
         sp.add_argument("--split", required=True, help="dev, dev-large, test, final ...")
         sp.add_argument("--data", help="directory with the split's files (default: $PIPELINE_DATA_ROOT/<split>)")
         sp.add_argument("--evidence", help="evidence JSONL (default runs/<split>/evidence.jsonl)")
         sp.add_argument("--results", help="results JSONL (default runs/<split>/results.jsonl)")
         sp.add_argument("--predictions", help="predictions JSONL (default runs/<split>/predictions.jsonl)")
+        provider_args(sp)
         if selection:
             sp.add_argument("--limit", type=int, help="only the first N questions")
             sp.add_argument("--question-ids", nargs="*", help="only these question ids")
@@ -142,9 +171,10 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--device", default="cuda")
 
     def answer_args(sp):
-        sp.add_argument("--max-chars", type=int, default=16000, help="message limit (server allows 32000)")
-        sp.add_argument("--attempts", type=int, default=3, help="tries per question before giving up")
-        sp.add_argument("--timeout", type=float, help="seconds to wait per try (default REACTOR_TIMEOUT)")
+        sp.add_argument("--max-chars", type=int, default=None,
+                        help=f"message limit (default 16000 for reactor, server allows 32000; {GROQ_DEFAULT_MAX_CHARS} for groq)")
+        sp.add_argument("--attempts", type=int, help="tries per question before giving up (default 3 reactor, 6 groq)")
+        sp.add_argument("--timeout", type=float, help="seconds to wait per try (default REACTOR_TIMEOUT; 180 for groq)")
         sp.add_argument("--dry-run", action="store_true", help="compose messages, report sizes, send nothing")
         sp.add_argument("--show", action="store_true", help="with --dry-run: print the first message")
 
@@ -166,11 +196,28 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("run", help="retrieve (if needed) + answer + predict + score")
     common(sp); retrieve_args(sp); answer_args(sp); predict_args(sp)
     sp.set_defaults(fn=cmd_run)
+    sp = sub.add_parser("chat", help="interactive REPL: type a question, see every retrieval step + Reactor's reasoning")
+    sp.add_argument("--split", default="dev", help="dev | test ... (default dev)")
+    sp.add_argument("--data", help="directory with the split's files (default: $PIPELINE_DATA_ROOT/<split>)")
+    sp.add_argument("--history", help="start on this history id (default: first one)")
+    sp.add_argument("--cache", help="embedding cache dir (default retriever/cache/<split>)")
+    sp.add_argument("--reranker", default="base", help="base | v2-m3 | none")
+    sp.add_argument("--rerank-text", default="best2", choices=["best1", "best2"])
+    sp.add_argument("--fusion", default="fused", choices=["fused", "rerank"])
+    sp.add_argument("--device", choices=["cuda", "cpu"], help="default: cuda if available")
+    provider_args(sp)
+    sp.add_argument("--max-chars", type=int, default=None, help=f"default 16000 reactor, {GROQ_DEFAULT_MAX_CHARS} groq")
+    sp.add_argument("--attempts", type=int)
+    sp.add_argument("--timeout", type=float)
+    sp.add_argument("--dry-run", action="store_true", help="show everything but do not call Reactor")
+    sp.add_argument("--show-message", action="store_true", help="also print the full message sent to Reactor")
+    sp.set_defaults(fn=lambda a: __import__("pipeline.chat", fromlist=["cmd_chat"]).cmd_chat(a))
     return ap
 
 
 def main(argv: list[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
+    _provider_defaults(a)
     return a.fn(a)
 
 
