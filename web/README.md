@@ -56,3 +56,24 @@ docker compose --profile api --profile trace up --build
 
 The trace service needs an NVIDIA-enabled Docker runtime. It persists downloaded models and embeddings in
 the `retriever_cache` volume; subsequent starts reuse them.
+
+### Public URL with Cloudflare Tunnel
+
+Before enabling this, revoke any Cloudflare API token accidentally exposed in chat or shell history. Create a
+**named, remotely-managed** tunnel in Cloudflare's dashboard, add a public hostname, and set its service to
+`http://memory-web:3000`. Copy the tunnel connector token (not an account API token) into the ignored root
+`.env` file:
+
+```sh
+CLOUDFLARE_TUNNEL_TOKEN=replace-with-the-named-tunnel-token
+```
+
+Then run the UI plus tunnel, and add `--profile trace` when the live retrieval graph is wanted:
+
+```sh
+docker compose --profile api --profile tunnel up -d
+# or: docker compose --profile api --profile trace --profile tunnel up -d
+```
+
+The public hostname exposes the application and can spend provider quota. Add a Cloudflare Access policy or
+other authentication before sharing it broadly.

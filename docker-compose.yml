@@ -159,6 +159,19 @@ services:
       - retriever_cache:/cache
     gpus: all
 
+  # Public ingress for the browser UI only. Create a named, remotely-managed
+  # Cloudflare Tunnel and configure its public hostname in the Cloudflare
+  # dashboard to route to http://memory-web:3000. The token stays in local
+  # .env (which is ignored) and must never be committed.
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      memory-web:
+        condition: service_started
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+
 volumes:
   postgres_data:
   pipeline_service_state:
