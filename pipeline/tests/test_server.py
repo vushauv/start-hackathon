@@ -67,3 +67,7 @@ def test_split_name_validation_and_host_guard(client):
     assert client.get("/api/questions", params={"split": "../etc"}).status_code == 400
     assert client.post("/api/predict", json={"split": "a/b"}).status_code == 400
     assert client.get("/api/splits", headers={"Host": "evil.example"}).status_code == 400
+    body = {"split": "mini", "question_id": "q1"}
+    assert client.post("/api/ask", json=body, headers={"Origin": "http://evil.example"}).status_code == 403
+    assert client.post("/api/ask", json=body, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.post("/api/ask", json=body, headers={"Origin": "http://testserver"}).status_code == 200

@@ -139,9 +139,26 @@ class State:
 def create_app(state: State, allowed_hosts: list[str] | None = None) -> FastAPI:
     from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
+    from urllib.parse import urlsplit
+
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    hosts = allowed_hosts or ["127.0.0.1", "localhost"]
     app = FastAPI(title="memory pipeline UI")
     # Only answer requests addressed to the host we were started on: blocks DNS-rebinding from a web page.
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts or ["127.0.0.1", "localhost"])
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
+
+    @app.middleware("http")
+    async def same_origin_posts(request: Request, call_next):
+        """A POST from another web page's origin (CSRF) is refused; our page sends no Origin or our own."""
+        if request.method == "POST":
+            origin = request.headers.get("origin")
+            if origin and (urlsplit(origin).hostname or "") not in hosts:
+                return JSONResponse({"detail": f"cross-origin request from {origin} refused"}, status_code=403)
+            if request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
+                return JSONResponse({"detail": "cross-site request refused"}, status_code=403)
+        return await call_next(request)
 
     @app.get("/")
     def index():
