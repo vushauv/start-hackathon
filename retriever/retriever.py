@@ -27,6 +27,11 @@ TOPK = {"single-session-user": 3, "single-session-assistant": 3, "knowledge-upda
 RERANKERS = {"base": "BAAI/bge-reranker-base", "v2-m3": "BAAI/bge-reranker-v2-m3"}
 # Defaults chosen from eval_retriever.py on all 526 dev questions (see RESULTS.md).
 DEFAULT_CONFIG = {"reranker": "base", "rerank_text": "best2", "fusion": "fused"}
+# Reranker score cut tuned on all 526 dev questions (dev/rerank_scores.jsonl): keep every candidate
+# with score >= RERANK_THRESHOLD (top-1 always kept). None = old per-type top-k.
+RERANK_THRESHOLD = -5.5
+# A stricter global cutoff reduces irrelevant sessions while keeping all question types on
+# the same retrieval path.
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_ROOT = os.environ.get("RETRIEVER_DATA_ROOT", os.path.expanduser("~/reactor-test/labeler/data"))
 
@@ -342,6 +347,14 @@ def rerank_text(idx, c, mode):
     return "\n...\n".join(idx.F_text[i] for i in ch[:2])
 
 
+def select_evidence(ordered, rr_scores_by_sid, qtype, threshold=None):
+    """Sessions to send: by reranker threshold (top-1 always kept) or per-type top-k."""
+    if threshold is None or rr_scores_by_sid is None:
+        return ordered[:topk_for(qtype)]
+    keep = [c for c in ordered if rr_scores_by_sid[c["sid"]] >= threshold]
+    return keep or ordered[:1]
+
+
 def final_order(cands, rr_scores=None, fusion="fused"):
     """cands are in RRF order. Returns reordered list."""
     if rr_scores is None:
@@ -364,15 +377,26 @@ def parse_date(s):
     return _date(int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
 
 
+CHRONO_NOTE = "[note] Evidence passages are in chronological order: E1 is the oldest session, the last E# is the most recent."
+KU_RULE = ("[rule] Knowledge-update question: the user's facts may change over time. The LATEST mention wins: "
+           "if sessions give different values, answer with the value from the most recent session.")
+TEMPORAL_RULE = ("[rule] Temporal question: session dates matter as much as the text. Anchor every event to the "
+                 "date of the session it was mentioned in (and to relative words like 'yesterday', 'last week' "
+                 "relative to that session date), then compute order or durations against today's date.")
+
+
 def make_hint(qtype, question_date, evidence):
-    if qtype not in ("temporal-reasoning", "knowledge-update") or not evidence:
+    if not evidence:
         return ""
+    if qtype not in ("temporal-reasoning", "knowledge-update"):
+        return CHRONO_NOTE
     qd = parse_date(question_date)
     rows = []
     for i, e in enumerate(evidence):
         d = parse_date(e["date"])
         rows.append((d, f"E{i + 1}", e["id"], e["date"]))
-    lines = [f"[hint] question date (today) = {question_date}"]
+    lines = [CHRONO_NOTE, KU_RULE if qtype == "knowledge-update" else TEMPORAL_RULE,
+             f"[hint] question date (today) = {question_date}"]
     for d, lab, sid, ds in rows:
         ago = f", {(qd - d).days} days before today" if (d and qd) else ""
         lines.append(f"[hint] {lab} ({sid}) date = {ds}{ago}")
@@ -446,8 +470,9 @@ def pack_evidence(idx, chosen, total=EVIDENCE_CHARS):
 class Retriever:
     def __init__(self, split_dir, cache_dir, reranker=DEFAULT_CONFIG["reranker"],
                  rerank_text_mode=DEFAULT_CONFIG["rerank_text"], fusion=DEFAULT_CONFIG["fusion"],
-                 device="cuda", log=print):
+                 device="cuda", log=print, rerank_threshold=RERANK_THRESHOLD):
         self.log = log
+        self.threshold = rerank_threshold
         self.questions = load_jsonl(os.path.join(split_dir, "questions.jsonl"))
         hs = load_histories(os.path.join(split_dir, "histories.jsonl"),
                             {q["history_id"] for q in self.questions})
@@ -477,7 +502,11 @@ class Retriever:
             idx = self.idx[q["history_id"]]
             ordered = final_order(cs, r, self.fusion)
             gt = guess_type(q["question"])
-            ev = pack_evidence(idx, ordered[:topk_for(gt)])
+            sc = {c["sid"]: float(x) for c, x in zip(cs, r)} if r is not None else None
+            chosen = select_evidence(ordered, sc, gt, self.threshold)
+            # feed the LLM in ascending session time (E1 = oldest)
+            chosen = sorted(chosen, key=lambda c: (parse_date(idx.dates[c["si"]]) or _date.min, idx.dates[c["si"]]))
+            ev = pack_evidence(idx, chosen)
             out.append({"question_id": q["question_id"], "history_id": q["history_id"],
                         "question": q["question"], "question_date": q.get("question_date", ""),
                         "guessed_type": gt, "evidence": ev,

@@ -53,6 +53,7 @@ uv run pipeline retrieve --split test                     # --reranker base|v2-m
 # 2. Any box: check sizes without sending, then ask Reactor (sequential, ~10-60 s per question)
 uv run pipeline answer --split test --dry-run --show      # prints max/mean message size and the first message
 uv run pipeline answer --split test                       # appends runs/test/results.jsonl; rerun = resume
+uv run pipeline answer --split test --provider openai --workers 8  # stateless OpenAI requests in parallel
 
 # 3. Turn results into the submission, then score (dev only)
 uv run pipeline predict --split test                      # -> runs/test/predictions.jsonl
@@ -89,6 +90,23 @@ prints the result.
 
 `compose()` keeps the message under `--max-chars` (16,000 default, the kit's limit; the server allows 32,000)
 by trimming the longest passage first (never below 200 characters), then dropping the last, least relevant one.
+It then sends the retained evidence oldest to newest by session timestamp.
+
+OpenAI and Groq are stateless and can use `--workers N` for bounded parallel requests. Reactor keeps one
+stateful history per dataset history and must use the default `--workers 1`.
+
+Use `--verify-answers` with OpenAI or Groq to run a citation-focused second pass. It marks an answer as an
+abstention only when that verifier returns `UNSUPPORTED`; verifier errors leave the original answer unchanged.
+After a completed run, use `--verify-existing` to check its saved answers without paying to answer them again.
+
+To retry only model abstentions, first reconcile interrupted or overlapping runs, then retain the selected
+retrieval snippets and add compact excerpts from the retriever's ranked candidates:
+
+```sh
+uv run pipeline answer --split test --provider openai --workers 8 --repair-results
+uv run pipeline answer --split test --provider openai --workers 8 --retry-abstentions --widen-evidence 12
+uv run pipeline predict --split test --provider openai
+```
 
 ## How predictions are formed (`postprocess.Policy`)
 

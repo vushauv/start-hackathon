@@ -234,7 +234,9 @@ def split_history(
         header = f"## session {s.get('session_id', '?')} ({s.get('date', '?')})"
         lines = [header]
         for t in s.get("turns", []):
-            lines.append(f"{t.get('role', 'user')}: {t.get('content', '')}")
+            lines.append(
+                f"[{t.get('role', 'user')}] [{s.get('date', 'timestamp unavailable')}] {t.get('content', '')}"
+            )
         block = "\n".join(lines)
         # split a single oversized session
         chunks = [block[i : i + limit] for i in range(0, len(block), limit)] or [""]

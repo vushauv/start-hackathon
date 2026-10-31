@@ -32,6 +32,10 @@ class Answerer(Protocol):
         """``(answer, attempts)``. Raises ``reactor_service.NoAnswer`` when it gave up."""
         ...
 
+    def verify(self, r: Retrieved, composed: Composed, answer: Answer) -> str:
+        """Return supported, unsupported, or unverified for a completed answer."""
+        ...
+
 
 class ReactorAnswerer:
     def __init__(self, settings: ReactorSettings | None = None, *, attempts: int = 3,
@@ -96,12 +100,10 @@ class ReactorAnswerer:
 class DryRunAnswerer:
     """No network: answers with the first passage cited, so the plumbing can be exercised end to end."""
 
-    def __init__(self):
-        self.n = 0
+    stateless = True
 
     def start_history(self, dataset_history_id: str) -> str:
-        self.n += 1
-        return f"dry-{self.n}"
+        return f"dry-{dataset_history_id}"
 
     def ask(self, r: Retrieved, composed: Composed) -> tuple[Answer, int]:
         from reactor_service import Citation
@@ -110,7 +112,7 @@ class DryRunAnswerer:
         a = Answer(answer="(dry run) [E1]" if cited else "(dry run)", abstained=False, citations=cited,
                    reply="", cycle=0, latency_s=0.0, ref="00000000", question=r.question,
                    question_date=r.question_date or None, question_id=r.question_id,
-                   history_id=f"dry-{self.n}", uncited=False)
+                   history_id=f"dry-{r.history_id}", uncited=False)
         return a, 1
 
 
@@ -120,6 +122,18 @@ GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b"
 GROQ_DEFAULT_MAX_CHARS = 60000
 GROQ_ENV_FILE = Path(__file__).resolve().parent.parent / ".env.groq"
+
+
+def _env_key(name: str, env_file: Path) -> str:
+    key = os.environ.get(name, "").strip()
+    if not key and env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip().removeprefix("export ").strip()
+            if line.startswith(name + "="):
+                key = line.split("=", 1)[1].strip().strip("'\"")
+    if not key:
+        raise reactor.ConfigError(f"{name} not set (environment or {env_file})")
+    return key
 
 
 def groq_api_key() -> str:
@@ -163,22 +177,30 @@ class GroqAnswerer:
 
     def __init__(self, model: str | None = None, *, attempts: int = 6, timeout: float | None = None,
                  reasoning_effort: str | None = None, max_completion_tokens: int = 4096,
+                 verify_answers: bool = False,
                  log: Callable[[str], None] = lambda s: None):
         self.model = model or GROQ_DEFAULT_MODEL
         self.attempts = max(1, attempts)
         self.timeout = timeout or 180.0
         self.reasoning_effort = reasoning_effort or os.environ.get("GROQ_REASONING_EFFORT", "medium")
         self.max_completion_tokens = max_completion_tokens
+        self.verify_answers = verify_answers
         self.log = log
         self.history_id: str | None = None
         self.last_reasoning = ""
         self.rate_limited = 0  # 429s seen, for reporting
-        self._client = httpx.Client(base_url=GROQ_BASE_URL, timeout=self.timeout,
-                                    headers={"Authorization": f"Bearer {groq_api_key()}"})
+        self._client = httpx.Client(base_url=self.BASE_URL, timeout=self.timeout,
+                                    headers={"Authorization": f"Bearer {self._key()}"})
+
+    BASE_URL = GROQ_BASE_URL
+    PREFIX = "groq"
+    stateless = True
+
+    def _key(self) -> str:
+        return groq_api_key()
 
     def start_history(self, dataset_history_id: str) -> str:
-        self.history_id = f"groq-{dataset_history_id}"
-        return self.history_id
+        return f"{self.PREFIX}-{dataset_history_id}"
 
     def _payload(self, text: str) -> dict:
         p = {"model": self.model, "messages": [{"role": "user", "content": text}], "temperature": 0,
@@ -217,7 +239,7 @@ class GroqAnswerer:
                 time.sleep(wait)
                 continue
             if resp.status_code != 200:  # 400/401/413...: a retry will not help
-                raise NoAnswer(f"Groq HTTP {resp.status_code}: {resp.text[:300]}")
+                raise NoAnswer(f"{self.PREFIX} HTTP {resp.status_code}: {resp.text[:300]}")
             msg = resp.json()["choices"][0]["message"]
             # gpt-oss writes citations as 【E1】; normalize so citation parsing / label stripping work as for Reactor
             content = (msg.get("content") or "").replace("\u3010", "[").replace("\u3011", "]")
@@ -237,15 +259,81 @@ class GroqAnswerer:
                        uncited=bool(ev) and not cited and not abstained, reply=content, cycle=0,
                        latency_s=round(latency, 3), retries=retries, ref=ref, question=r.question,
                        question_date=r.question_date or None, question_id=r.question_id,
-                       history_id=self.history_id)
+                       history_id=f"{self.PREFIX}-{r.history_id}")
             return a, attempt
         raise NoAnswer(f"Groq gave no answer after {self.attempts} attempts: {last}")
 
+    def verify(self, r: Retrieved, composed: Composed, answer: Answer) -> str:
+        """Use an independent, citation-focused pass to reject unsupported final answers."""
+        return self.verify_candidate(r, composed, answer.answer, answer.cited_ids)
+
+    def verify_candidate(self, r: Retrieved, composed: Composed, answer_text: str, cited_ids: list[str]) -> str:
+        """Check a saved answer against its cited evidence without asking the original question again."""
+        if not self.verify_answers:
+            return "not-run"
+        cited = set(cited_ids)
+        passages = [e for e in composed.evidence if not cited or e.id in cited]
+        evidence = "\n\n".join(
+            f"[E{i}] date: {e.date}\n{e.text}" for i, e in enumerate(passages, 1)
+        )
+        prompt = (
+            "Check whether the candidate answer is fully supported by the supplied evidence. "
+            "Return exactly SUPPORTED when every required fact follows from the evidence. "
+            "Return exactly UNSUPPORTED when any required fact is absent, contradicted, or only guessed.\n\n"
+            f"Question: {r.question}\nCandidate answer: {answer_text}\n\nEvidence:\n{evidence}"
+        )
+        try:
+            response = self._client.post("/chat/completions", json=self._payload(prompt))
+            if response.status_code != 200:
+                self.log(f"{r.question_id}: verifier HTTP {response.status_code}; keeping answer")
+                return "unverified"
+            content = response.json()["choices"][0]["message"].get("content") or ""
+        except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+            self.log(f"{r.question_id}: verifier {type(exc).__name__}; keeping answer")
+            return "unverified"
+        verdict = content.strip().upper()
+        if verdict == "SUPPORTED":
+            return "supported"
+        if verdict == "UNSUPPORTED":
+            return "unsupported"
+        self.log(f"{r.question_id}: verifier returned {content[:80]!r}; keeping answer")
+        return "unverified"
+
+
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+OPENAI_DEFAULT_MODEL = "gpt-5.6-luna"
+OPENAI_ENV_FILE = Path(__file__).resolve().parent.parent / ".env.openai"
+
+
+class OpenAIAnswerer(GroqAnswerer):
+    """Same as GroqAnswerer against api.openai.com (key: OPENAI_API_KEY or pipeline/.env.openai)."""
+    BASE_URL = OPENAI_BASE_URL
+    PREFIX = "openai"
+
+    def __init__(self, model: str | None = None, **kw):
+        super().__init__(model or OPENAI_DEFAULT_MODEL, **kw)
+        self.reasoning_effort = os.environ.get("OPENAI_REASONING_EFFORT", "low")
+
+    def _key(self) -> str:
+        return _env_key("OPENAI_API_KEY", OPENAI_ENV_FILE)
+
+    def _payload(self, text: str) -> dict:
+        p = {"model": self.model, "messages": [{"role": "user", "content": text}],
+             "max_completion_tokens": self.max_completion_tokens}
+        if self.model.startswith(("gpt-5", "gpt-6", "o")):
+            p["reasoning_effort"] = self.reasoning_effort
+        else:
+            p["temperature"] = 0
+        return p
+
 
 def make_answerer(provider: str, *, model: str | None = None, attempts: int | None = None,
-                  timeout: float | None = None, log: Callable[[str], None] = lambda s: None) -> Answerer:
+                  timeout: float | None = None, verify_answers: bool = False,
+                  log: Callable[[str], None] = lambda s: None) -> Answerer:
     if provider == "groq":
-        return GroqAnswerer(model, attempts=attempts or 6, timeout=timeout, log=log)
+        return GroqAnswerer(model, attempts=attempts or 6, timeout=timeout, verify_answers=verify_answers, log=log)
+    if provider == "openai":
+        return OpenAIAnswerer(model, attempts=attempts or 6, timeout=timeout, verify_answers=verify_answers, log=log)
     if provider == "reactor":
         return ReactorAnswerer(attempts=attempts or 3, timeout=timeout, log=log)
     raise ValueError(f"unknown provider {provider!r} (reactor | groq)")

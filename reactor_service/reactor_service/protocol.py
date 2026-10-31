@@ -16,11 +16,18 @@ _FINAL_RE = re.compile(
 )
 _BRACKET_RE = re.compile(r"\[([^\[\]]*)\]")
 _LABEL_RE = re.compile(r"\bE(\d+)\b", re.IGNORECASE)
+_ROLE_LINE_RE = re.compile(r"^(user|assistant):\s*", re.IGNORECASE | re.MULTILINE)
 
 
 def new_ref() -> str:
     """Fresh 8-hex-digit reference tying a question to its final answer."""
     return secrets.token_hex(4)
+
+
+def timestamp_turns(text: str, session_date: str | None) -> str:
+    """Render benchmark speaker lines as ``[role] [session timestamp]`` for the LLM."""
+    timestamp = session_date or "timestamp unavailable"
+    return _ROLE_LINE_RE.sub(lambda match: f"[{match.group(1).lower()}] [{timestamp}] ", text.strip())
 
 
 def build_message(
@@ -40,14 +47,22 @@ def build_message(
     if not question:
         raise ValueError("question must not be empty")
 
-    lines = [f"Question [ref:{ref}]: {question}"]
+    today = question_date or "unknown (no benchmark question date was supplied)"
+    lines = [
+        f"Today is: {today}. Use this benchmark question date as the sole reference for temporal reasoning.",
+        f"Question [ref:{ref}]: {question}",
+    ]
     if question_date:
         if " " in question_date or "T" in question_date:
             lines.append(
-                f"Question date: {question_date} (the moment the question is asked: treat it as now; no timezone)."
+                f"Question date: {question_date} (the moment the benchmark question is asked: treat it as now; "
+                "use this date for temporal reasoning)."
             )
         else:
-            lines.append(f"Question date: {question_date} (treat this as today's date).")
+            lines.append(
+                f"Question date: {question_date} (treat this as today's date; do not use the system timestamp "
+                "for temporal reasoning)."
+            )
     if evidence:
         lines.append("")
         lines.append("Evidence:")
@@ -56,7 +71,7 @@ def build_message(
             if p.date:
                 meta += f", date={p.date}"
             lines.append(f"[E{i}] ({meta})")
-            lines.append(p.text.strip())
+            lines.append(timestamp_turns(p.text, p.date))
             lines.append("")
         lines.append(
             "Answer the question from the evidence above and cite the labels you used, "

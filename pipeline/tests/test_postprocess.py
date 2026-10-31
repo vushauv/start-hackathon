@@ -11,6 +11,7 @@ def result(**kw):
 def test_strip_labels():
     assert strip_labels("In June [E2].") == "In June."
     assert strip_labels("45 minutes [E1, E3] each way [ E2 ]") == "45 minutes each way"
+    assert strip_labels("The answer is June [E2]") == "June"
 
 
 def test_answered_keeps_agent_citations():

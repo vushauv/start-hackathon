@@ -8,6 +8,7 @@ the whole message is under ``max_chars``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 import reactor_service as reactor
 
@@ -29,13 +30,16 @@ GENERAL_RULES = [
 # Extra rules by guessed question type (the retriever's rule-based guess; wrong guesses are harmless).
 TYPE_RULES = {
     "knowledge-update": [
-        "The question asks for the current value. When passages disagree, the one from the most recent "
-        "session date is the answer; earlier values are outdated.",
+        "For knowledge-update questions, the latest mention wins. When passages disagree, use the value from "
+        "the most recent session date; earlier values are outdated.",
     ],
     "temporal-reasoning": [
-        "Use the session dates given with each passage and in the hints. Day counts in the hints are "
+        "For temporal-reasoning questions, session dates matter as much as the text. Use the dates given with "
+        "each passage and in the hints. Day counts in the hints are "
         "computed exactly; prefer them to your own arithmetic. A date mentioned in the text as 'today', "
         "'yesterday' or 'last week' is relative to that passage's session date.",
+        "Before answering, identify the dated events needed for the question and calculate from those dates. "
+        "Use every relevant passage when the question asks for an order or interval.",
     ],
     "single-session-assistant": [
         "The question is about what the assistant said or recommended. Take the answer from the "
@@ -44,6 +48,8 @@ TYPE_RULES = {
     "multi-session": [
         "The answer may combine facts from several passages (e.g. a count or a sum). Count only items "
         "that belong to the user and are explicitly stated; do not double count repeated mentions.",
+        "Identify each required component before answering. Combine only components directly supported by the "
+        "passages, and cite every passage used in the calculation.",
     ],
 }
 
@@ -80,15 +86,34 @@ def _message(r: Retrieved, evidence: list[Evidence], notes: str) -> str:
     )
 
 
+def _timestamp(evidence: Evidence) -> datetime | None:
+    """Parse release session dates; unknown formats retain their retrieval order at the end."""
+    for pattern in ("%Y/%m/%d (%a) %H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(evidence.date, pattern)
+        except ValueError:
+            pass
+    return None
+
+
+def _chronological(evidence: list[Evidence]) -> list[Evidence]:
+    """Oldest first, with undated passages after dated ones in their original order."""
+    return sorted(
+        evidence,
+        key=lambda item: (0, _timestamp(item)) if _timestamp(item) is not None else (1, datetime.max),
+    )
+
+
 def compose(r: Retrieved, max_chars: int, *, notes: str | None = None) -> Composed:
-    """Evidence shrunk so the message fits ``max_chars``: trim the longest passage, drop the last one if needed."""
+    """Fit evidence by retrieval relevance, then return it oldest-to-newest for the LLM."""
     notes = notes_for(r) if notes is None else notes
     evidence = [e.model_copy() for e in r.evidence if e.text.strip()]
     while True:
         msg = _message(r, evidence, notes)
         excess = len(msg) - max_chars
         if excess <= 0 or not evidence:
-            return Composed(evidence, notes, msg)
+            ordered = _chronological(evidence)
+            return Composed(ordered, notes, _message(r, ordered, notes))
         longest = max(range(len(evidence)), key=lambda i: len(evidence[i].text))
         text = evidence[longest].text
         base = text[: -len(ELLIPSIS)] if text.endswith(ELLIPSIS) else text
