@@ -122,6 +122,42 @@ Why citations on abstention: evidence F1 is scored on every answerable question,
 on, and on unanswerable ones citations are ignored, so the top passage can only help. Nothing else is touched:
 no hand edits, and the answer text is Reactor's.
 
+## FastAPI service (Reactor)
+
+Build evidence once, then serve the same retrieval and prompting pipeline through the stateful Reactor agent.
+The service serializes requests because one Reactor agent can process only one active history at a time.
+
+```sh
+cd pipeline
+uv sync --extra api
+uv run --extra api pipeline api-serve --split dev --data ../dev --evidence runs/dev/evidence.jsonl
+```
+
+`GET /health` confirms the configured service. `POST /v1/dataset/answers/{question_id}` retrieves the matching
+prebuilt evidence row and asks Reactor. `POST /v1/answers` accepts a complete `Retrieved` JSON bundle for clients
+that use their own retrieval system. Use `POST /v1/conversations` to start a resumable Reactor history, then
+`POST /v1/conversations/{conversation_id}/dataset/answers/{question_id}` to continue it. `GET /v1/conversations`
+lists available conversations and `GET /v1/conversations/{conversation_id}/answers` returns their saved answers.
+Conversation state is appended to `runs/<split>/reactor-service/conversations.jsonl` by default; override it with
+`--state`. API configuration uses the existing Reactor environment variables; never put keys in request bodies.
+
+### Docker
+
+The `memory-api` Compose profile starts the same Reactor service without exposing credentials in the image. Build
+evidence first, then point Compose at the directory and evidence file on the host:
+
+```sh
+cd ..
+export REACTOR_ENV_FILE="$HOME/reactor-test/.env"
+export PIPELINE_DATA_DIR=./dev
+export PIPELINE_EVIDENCE_FILE=./pipeline/runs/dev/evidence.jsonl
+docker compose --profile api up --build memory-api
+```
+
+It binds port `127.0.0.1:8000`, mounts data and evidence read-only, and retains only conversation state in the
+named `pipeline_service_state` volume. Stop it with `docker compose --profile api down`; add `-v` only when the
+saved conversations should be deleted.
+
 ## Scoring on dev
 
 `pipeline score --split dev` prints the organizers' table (correct / unjudged / abstention recall / false

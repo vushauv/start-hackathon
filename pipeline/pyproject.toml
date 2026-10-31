@@ -18,6 +18,10 @@ retrieval = [
     "numpy",
     "scipy",
 ]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
 
 [project.scripts]
 pipeline = "pipeline.cli:main"
