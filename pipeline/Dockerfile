@@ -17,6 +17,10 @@ RUN pip install --no-cache-dir "uv>=0.5"
 # must be present before uv resolves and installs the service extra.
 COPY pipeline /app/pipeline
 COPY reactor_service /app/reactor_service
+# ``pipeline serve`` loads the repository-level retriever module at runtime.
+# It is only used by the optional trace image, but copying it here keeps both
+# Docker targets built from the same Dockerfile.
+COPY retriever /app/retriever
 
 WORKDIR /app/pipeline
 RUN if [ "$INSTALL_RETRIEVAL" = "1" ]; then \
