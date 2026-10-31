@@ -19,6 +19,14 @@ def test_build_message_labels_and_ref():
     assert "INSUFFICIENT_EVIDENCE" in m
 
 
+def test_build_message_notes_block():
+    m = build_message("When?", EV, ref="deadbeef", notes="[hint] E2 is the latest session")
+    body, _, tail = m.partition("Notes:\n")
+    assert "[E2]" in body and tail.startswith("[hint] E2 is the latest session")
+    assert "# FINAL ANSWER" in tail  # the final-answer instruction comes after the notes
+    assert "Notes:" not in build_message("When?", EV, ref="deadbeef", notes="  ")
+
+
 def test_build_message_rejects_empty():
     with pytest.raises(ValueError):
         build_message("   ", EV, ref="deadbeef")

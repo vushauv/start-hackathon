@@ -32,6 +32,7 @@ class AskRequest(BaseModel):
     question_date: str | None = None
     history_id: str | None = None
     question_id: str | None = None
+    notes: str | None = Field(default=None, description="Extra hints/rules sent after the evidence")
 
     @field_validator("question")
     @classmethod

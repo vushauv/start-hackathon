@@ -1,0 +1,42 @@
+[project]
+name = "memory-pipeline"
+version = "0.1.0"
+description = "End-to-end answering pipeline for the RxAI memory challenge: retrieval -> Reactor -> predictions.jsonl"
+requires-python = ">=3.11"
+dependencies = [
+    "reactor-service",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+# Only needed for `pipeline retrieve` (GPU box). `pipeline answer/predict/score` work without it.
+retrieval = [
+    "torch",
+    "sentence-transformers",
+    "transformers",
+    "numpy",
+    "scipy",
+]
+
+[project.scripts]
+pipeline = "pipeline.cli:main"
+
+[tool.uv.sources]
+reactor-service = { path = "../reactor_service", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "websockets>=14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pipeline"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

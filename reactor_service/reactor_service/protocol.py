@@ -29,8 +29,13 @@ def build_message(
     *,
     ref: str,
     question_date: str | None = None,
+    notes: str | None = None,
 ) -> str:
-    """Compose the text sent to Reactor for one question."""
+    """Compose the text sent to Reactor for one question.
+
+    ``notes`` is an optional free-text block (hints, answer-style rules) placed
+    after the evidence and before the final-answer instruction.
+    """
     question = question.strip()
     if not question:
         raise ValueError("question must not be empty")
@@ -39,7 +44,7 @@ def build_message(
     if question_date:
         if " " in question_date or "T" in question_date:
             lines.append(
-                f"Question date: {question_date} (wall-clock time of the question, no timezone)."
+                f"Question date: {question_date} (the moment the question is asked: treat it as now; no timezone)."
             )
         else:
             lines.append(f"Question date: {question_date} (treat this as today's date).")
@@ -60,6 +65,10 @@ def build_message(
     else:
         lines.append("")
         lines.append("Answer the question from what you remember.")
+    if notes and notes.strip():
+        lines.append("")
+        lines.append("Notes:")
+        lines.append(notes.strip())
     lines.append("")
     lines.append(
         f"Finish with one line that starts exactly with `# FINAL ANSWER [ref:{ref}]:` "
