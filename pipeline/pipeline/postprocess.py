@@ -8,12 +8,24 @@ what to do when the agent gave nothing usable.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .models import Prediction, QuestionResult
 
 _LABELS = re.compile(r"\s*\[\s*E\d+(?:\s*[,;]\s*E\d+)*\s*\]")
 _ANSWER_PREFIX = re.compile(r"^(?:the\s+answer\s+is|answer:|it\s+is)\s+", re.IGNORECASE)
+
+# One session is sufficient for direct lookups.  Update, temporal, and aggregation
+# questions often need several *directly used* sessions, and scoring rewards citing
+# each one.  These are caps, not retrieval fallbacks: extra sessions are emitted only
+# when the LLM selected them.
+DEFAULT_CITATION_LIMITS = {
+    "single-session-user": 1,
+    "single-session-assistant": 1,
+    "knowledge-update": 2,
+    "temporal-reasoning": 4,
+    "multi-session": 4,
+}
 
 
 def strip_labels(answer: str) -> str:
@@ -27,8 +39,8 @@ def strip_labels(answer: str) -> str:
 class Policy:
     """What to submit when the agent did not answer cleanly.
 
-    * An answered question submits one citation: the first LLM-selected session, or the top retrieved
-      passage when the LLM selected none.
+    * An answered question submits the directly used LLM-selected sessions, bounded by question type.
+      An uncited answer falls back to its top retrieved passage so every non-abstention has a citation.
     * Abstentions submit no citations. This keeps the submission contract unambiguous.
     * ``abstain_on_no_answer``: a question with no final answer (timeout, closed, refused after retries)
       is submitted as an abstention; otherwise as an empty answer (scored wrong either way, but an
@@ -38,6 +50,7 @@ class Policy:
     fallback_citations: int = 1
     abstain_citations: int = 1
     abstain_on_no_answer: bool = True
+    citation_limits: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_CITATION_LIMITS))
 
 
 def _dedupe(ids: list[str], known: set[str] | None) -> list[str]:
@@ -59,4 +72,8 @@ def to_prediction(r: QuestionResult, policy: Policy = Policy(), known: set[str] 
     if r.status == "abstained":
         return Prediction(question_id=r.question_id, abstain=True, answer="", citations=[])
     answer = strip_labels(r.answer_raw)
-    return Prediction(question_id=r.question_id, abstain=False, answer=answer, citations=(cited[:1] or sent[:1]))
+    limit = max(1, policy.citation_limits.get(r.guessed_type, 1))
+    # A fallback is deliberately one session: it satisfies the submission contract
+    # without inventing extra support the model did not select.
+    citations = cited[:limit] or sent[:1]
+    return Prediction(question_id=r.question_id, abstain=False, answer=answer, citations=citations)

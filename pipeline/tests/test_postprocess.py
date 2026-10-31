@@ -36,6 +36,11 @@ def test_answered_uses_only_the_strongest_model_selected_citation():
     assert to_prediction(result(cited_ids=["s_3", "s_2"])).citations == ["s_3"]
 
 
+def test_multi_session_keeps_bounded_model_selected_citations():
+    p = to_prediction(result(guessed_type="multi-session", cited_ids=["s_3", "s_2", "s_1"]))
+    assert p.citations == ["s_3", "s_2", "s_1"]
+
+
 def test_no_answer_policy():
     r = result(status="no-answer", answer_raw="", cited_ids=[], error="TimedOut")
     assert to_prediction(r).abstain is True

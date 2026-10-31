@@ -22,8 +22,9 @@ GENERAL_RULES = [
     "No hedging, no alternatives, no 'possibly'.",
     "The evidence is from the user's own past chats. 'I'/'my' in the question is the user. Facts about "
     "other people (friends, family, colleagues) do not answer a question about the user.",
-    "If the evidence talks about the topic but does not state the asked fact for the user, answer "
-    "INSUFFICIENT_EVIDENCE rather than guessing.",
+    "Answer when a supplied passage explicitly states the requested fact, including when the assistant "
+    "explicitly confirms or recaps it as the user's fact. Answer INSUFFICIENT_EVIDENCE only when no "
+    "supplied passage supports the requested fact; never fill a gap by guessing.",
     "Cite every [E#] passage the answer relies on, and no others.",
 ]
 
