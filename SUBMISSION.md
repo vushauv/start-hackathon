@@ -1,8 +1,8 @@
 # Test Submission
 
-The final artifact is `pipeline/runs/test/submission-openai-gpt6-astra/predictions.jsonl`.
+The final artifact is `pipeline/runs/test/submission-openai-gpt61-sol/predictions.jsonl`.
 It is generated from the test split with hybrid retrieval, reranking, and the OpenAI
-`gpt-6-astra` model. The input evidence is reused from `pipeline/runs/test/evidence.jsonl`.
+`gpt-6.1-sol` model. The input evidence is reused from `pipeline/runs/test/evidence.jsonl`.
 
 ## Reproduce
 
@@ -13,15 +13,15 @@ uv sync
 # OPENAI_API_KEY is read from pipeline/.env.openai or the environment.
 uv run pipeline answer \
   --split test --data ../test_dataset \
-  --provider openai --model gpt-6-astra --workers 8 --verify-answers \
+  --provider openai --model gpt-6.1-sol --workers 8 --verify-answers \
   --evidence runs/test/evidence.jsonl \
-  --results runs/test/submission-openai-gpt6-astra/results.jsonl
+  --results runs/test/submission-openai-gpt61-sol/results.jsonl
 
 uv run pipeline predict \
   --split test --data ../test_dataset --provider openai \
   --evidence runs/test/evidence.jsonl \
-  --results runs/test/submission-openai-gpt6-astra/results.jsonl \
-  --predictions runs/test/submission-openai-gpt6-astra/predictions.jsonl
+  --results runs/test/submission-openai-gpt61-sol/results.jsonl \
+  --predictions runs/test/submission-openai-gpt61-sol/predictions.jsonl
 ```
 
 `results.jsonl` checkpoints each completed answer. Re-running the answer command
