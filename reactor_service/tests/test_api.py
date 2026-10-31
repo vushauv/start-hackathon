@@ -60,6 +60,24 @@ async def test_ask_happy_path():
     assert json.loads(a.to_jsonl())["status"] == "answered"
 
 
+async def test_ask_structured_final_answer():
+    async def handler(ws):
+        msg = json.loads(await ws.recv())
+        ref = REF_RE.search(msg["text"]).group(1)
+        await ws.send(json.dumps({"type": "ack", "text": msg["text"], "cycle": 0}))
+        await ws.send(json.dumps({
+            "type": "reply", "cycle": 1,
+            "text": f'# FINAL ANSWER [ref:{ref}]: {{"answer":"June","citations":["s_2"]}}',
+        }))
+
+    server, port = await run_server(handler)
+    async with server:
+        a = await reactor.aask("When?", [{"id": "s_1", "text": "May"}, {"id": "s_2", "text": "June"}], settings=make_settings(port))
+    assert a.answer == "June"
+    assert a.cited_ids == ["s_2"]
+    assert a.uncited is False
+
+
 async def test_abstention_and_uncited():
     async def handler(ws):
         msg = json.loads(await ws.recv())

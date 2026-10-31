@@ -1,7 +1,7 @@
 import pytest
 
 from reactor_service.models import AskRequest, Evidence
-from reactor_service.protocol import build_message, citations, final_answers, is_abstention
+from reactor_service.protocol import build_message, citations, final_answers, final_output, is_abstention
 
 EV = [
     Evidence(id="s_1", date="2023/05/20 (Sat) 02:21", text="user: We booked the hall for May."),
@@ -50,6 +50,22 @@ def test_citations_known_and_unknown():
     cited, unknown = citations("June [E2] and [E1, E7] [E2]", EV)
     assert [(c.label, c.id) for c in cited] == [("E2", "s_2"), ("E1", "s_1")]
     assert unknown == ["E7"]
+
+
+def test_structured_final_output_uses_only_known_session_ids():
+    answer, cited, unknown = final_output(
+        '{"answer":"June", "citations":["s_2", "s_unknown", "s_2"]}', EV
+    )
+    assert answer == "June"
+    assert [(item.label, item.id) for item in cited] == [("E2", "s_2")]
+    assert unknown == ["s_unknown"]
+
+
+def test_structured_final_output_keeps_legacy_labels():
+    answer, cited, unknown = final_output('{"answer":"June", "citations":["E2"]}', EV)
+    assert answer == "June"
+    assert [(item.label, item.id) for item in cited] == [("E2", "s_2")]
+    assert unknown == []
 
 
 def test_abstention():

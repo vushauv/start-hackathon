@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 
@@ -87,9 +88,12 @@ def build_message(
     lines.append("")
     lines.append(
         f"Finish with one line that starts exactly with `# FINAL ANSWER [ref:{ref}]:` "
-        "followed by the answer. "
+        "followed by valid JSON with exactly `answer` and `citations` fields. "
+        "`citations` must be an array of only the evidence session IDs that directly support the final answer; "
+        "do not cite retrieved but unused sessions. "
+        f"For example: `# FINAL ANSWER [ref:{ref}]: {{\"answer\":\"June\",\"citations\":[\"s_abc\"]}}`. "
         f"If the evidence does not answer the question, write "
-        f"`# FINAL ANSWER [ref:{ref}]: {ABSTAIN}` instead. "
+        f"`# FINAL ANSWER [ref:{ref}]: {{\"answer\":\"{ABSTAIN}\",\"citations\":[]}}` instead. "
         "Anything before that line is treated as interim notes."
     )
     return "\n".join(lines)
@@ -136,6 +140,50 @@ def citations(
             else:
                 unknown.append(label)
     return cited, unknown
+
+
+def final_output(
+    answer: str, evidence: list[Evidence] | tuple[Evidence, ...]
+) -> tuple[str, list[Citation], list[str]]:
+    """Parse an answer plus its model-selected evidence session IDs.
+
+    The preferred final-answer payload is ``{"answer":"June", "citations":["s_2"]}``.
+    Every supplied ID is validated against the evidence the model actually saw.
+    Legacy free-text answers with ``[E#]`` labels remain supported.
+    """
+    try:
+        payload = json.loads(answer)
+    except (TypeError, json.JSONDecodeError):
+        cited, unknown = citations(answer, evidence)
+        return answer, cited, unknown
+
+    if not isinstance(payload, dict) or not isinstance(payload.get("answer"), str) or not isinstance(payload.get("citations"), list):
+        cited, unknown = citations(answer, evidence)
+        return answer, cited, unknown
+
+    cited: list[Citation] = []
+    unknown: list[str] = []
+    seen: set[str] = set()
+    by_id = {item.id: (index, item) for index, item in enumerate(evidence, start=1)}
+    for raw in payload["citations"]:
+        if not isinstance(raw, str):
+            unknown.append(str(raw))
+            continue
+        label_match = re.fullmatch(r"\s*E(\d+)\s*", raw, re.IGNORECASE)
+        if label_match:
+            index = int(label_match.group(1))
+            item = evidence[index - 1] if 0 < index <= len(evidence) else None
+            label = f"E{index}"
+        else:
+            hit = by_id.get(raw)
+            index, item = hit if hit else (0, None)
+            label = f"E{index}" if item else raw
+        if item is None:
+            unknown.append(raw)
+        elif item.id not in seen:
+            seen.add(item.id)
+            cited.append(Citation(label=label, id=item.id))
+    return payload["answer"], cited, unknown
 
 
 def history_part(text: str, index: int, total: int) -> str:

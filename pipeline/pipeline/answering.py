@@ -211,7 +211,7 @@ class GroqAnswerer:
 
     def ask(self, r: Retrieved, composed: Composed) -> tuple[Answer, int]:
         from reactor_service.api import _evidence
-        from reactor_service.protocol import citations, final_answers, is_abstention, new_ref
+        from reactor_service.protocol import final_answers, final_output, is_abstention, new_ref
 
         ev = _evidence([e.model_dump() for e in composed.evidence])
         ref = new_ref()
@@ -253,8 +253,8 @@ class GroqAnswerer:
                 self.log(f"{r.question_id}: {last} on attempt {attempt}")
                 retries += 1
                 continue
+            answer, cited, unknown = final_output(answer, ev)
             abstained = is_abstention(answer)
-            cited, unknown = citations(answer, ev)
             a = Answer(answer=answer, abstained=abstained, citations=cited, unknown_citations=unknown,
                        uncited=bool(ev) and not cited and not abstained, reply=content, cycle=0,
                        latency_s=round(latency, 3), retries=retries, ref=ref, question=r.question,

@@ -11,7 +11,7 @@ from .config import ReactorSettings, get_settings
 from .errors import ReactorError
 from .models import Answer, AskRequest, Evidence, History, TextReply
 from .protocol import build_message as _build_message
-from .protocol import citations, history_part, is_abstention, new_ref
+from .protocol import final_output, history_part, is_abstention, new_ref
 
 T = TypeVar("T")
 
@@ -70,9 +70,8 @@ async def aask(
         req.question, req.evidence, ref=ref, question_date=req.question_date, notes=req.notes
     )
     raw = await client.send(s, text, ref=ref, history_id=req.history_id, timeout=timeout)
-    answer = raw.answer or ""
+    answer, cited, unknown = final_output(raw.answer or "", req.evidence)
     abstained = is_abstention(answer)
-    cited, unknown = citations(answer, req.evidence)
     return Answer(
         answer=answer,
         abstained=abstained,
